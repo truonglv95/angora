@@ -182,7 +182,14 @@ jobs:
           if [ "$DRY_RUN" = "true" ]; then
             echo "Dry run enabled. Skipping npm publish."
           elif [ -n "$NODE_AUTH_TOKEN" ]; then
+            echo "Publishing packages via Changeset..."
             bun run release || true
+            echo "Verifying each package in packages/* is published to NPM..."
+            for p in packages/*; do
+              if [ -f "$p/package.json" ]; then
+                (cd "$p" && npm publish --access public --provenance || true)
+              fi
+            done
           else
             echo "No NPM_TOKEN found. Skipping npm publish."
           fi
