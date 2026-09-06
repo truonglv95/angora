@@ -273,7 +273,7 @@ export function buildTcbWorkspace(
 
   const tcbTsconfigContent = {
     extends: extendsPath,
-    include: ['../**/*', './tcb/**/*'],
+    include: ['./tcb/**/*'],
     exclude: [
       '../node_modules',
       '../**/node_modules',

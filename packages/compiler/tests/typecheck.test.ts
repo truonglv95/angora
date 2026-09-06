@@ -62,6 +62,12 @@ describe('@angora-js/compiler - TypeScript 7 & Native Rust OXC Typecheck Pipelin
     const result = await runTypecheck(rootDir);
 
     if (!result.success || result.diagnostics.length > 0) {
+      const summary = (result.formattedOutput || JSON.stringify(result.diagnostics))
+        .replace(/\r/g, '')
+        .replace(/\n/g, '%0A');
+      console.log(
+        `::error file=packages/compiler/tests/typecheck.test.ts,title=TypecheckFailure::${summary}`
+      );
       console.error(
         'TYPECHECK CLEAN WORKSPACE FAILURE DIAGNOSTICS:\n' +
           (result.formattedOutput || JSON.stringify(result.diagnostics, null, 2))
@@ -70,8 +76,8 @@ describe('@angora-js/compiler - TypeScript 7 & Native Rust OXC Typecheck Pipelin
 
     expect(result.durationMs).toBeLessThan(5000); // Super fast native speed
     expect(result.componentsChecked).toBeGreaterThan(0);
+    expect(result.diagnostics).toEqual([]);
     expect(result.success).toBe(true);
-    expect(result.diagnostics.length).toBe(0);
   });
 
   test('should detect template type errors on custom components and pipes with native tsc', async () => {
