@@ -1,12 +1,19 @@
-import { describe, test, expect, afterEach } from 'bun:test';
+import { describe, test, expect, afterEach, afterAll } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { getTemplateFiles, scaffoldAngoraProject } from '../src/index.ts';
 
 describe('create-angora - Project Scaffolding CLI Engine', () => {
-  const testOutputDir = path.resolve(__dirname, '../.temp-test-project');
+  const testOutputDir = path.join(os.tmpdir(), 'angora-create-test-' + Date.now());
 
   afterEach(() => {
+    if (fs.existsSync(testOutputDir)) {
+      fs.rmSync(testOutputDir, { recursive: true, force: true });
+    }
+  });
+
+  afterAll(() => {
     if (fs.existsSync(testOutputDir)) {
       fs.rmSync(testOutputDir, { recursive: true, force: true });
     }

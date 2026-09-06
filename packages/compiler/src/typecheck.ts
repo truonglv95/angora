@@ -87,7 +87,12 @@ export function findComponentFiles(dir: string, baseDir: string = dir): string[]
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        if (!IGNORED.has(entry.name) && entry.name !== 'tests' && entry.name !== '__tests__') {
+        if (
+          !IGNORED.has(entry.name) &&
+          !entry.name.startsWith('.') &&
+          entry.name !== 'tests' &&
+          entry.name !== '__tests__'
+        ) {
           scan(path.join(current, entry.name));
         }
       } else if (
@@ -277,6 +282,11 @@ export function buildTcbWorkspace(
       '../target',
       '../**/target',
       '../.turbo',
+      '../**/tests/**',
+      '../**/*.test.ts',
+      '../**/*.spec.ts',
+      '../packages/create-angora/**',
+      '../**/.temp*/**',
     ],
   };
 

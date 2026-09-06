@@ -61,6 +61,13 @@ describe('@angora-js/compiler - TypeScript 7 & Native Rust OXC Typecheck Pipelin
   test('should run full end-to-end typecheck with native Go tsc and return 0 errors on clean workspace', async () => {
     const result = await runTypecheck(rootDir);
 
+    if (!result.success || result.diagnostics.length > 0) {
+      console.error(
+        'TYPECHECK CLEAN WORKSPACE FAILURE DIAGNOSTICS:\n' +
+          (result.formattedOutput || JSON.stringify(result.diagnostics, null, 2))
+      );
+    }
+
     expect(result.durationMs).toBeLessThan(5000); // Super fast native speed
     expect(result.componentsChecked).toBeGreaterThan(0);
     expect(result.success).toBe(true);
