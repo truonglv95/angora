@@ -32,7 +32,10 @@
       "@angora-js/rxjs-interop": ["./packages/rxjs-interop/src/index.ts"],
       "@angora-js/query": ["./packages/query/src/index.ts"],
       "@angora-js/primitives": ["./packages/primitives/src/index.ts"],
-      "@angora-js/i18n": ["./packages/i18n/src/index.ts"]
+      "@angora-js/i18n": ["./packages/i18n/src/index.ts"],
+      "@angora-js/create-angora": ["./packages/create-angora/src/index.ts"],
+      "@angora-js/prettier-plugin-angora": ["./packages/prettier-plugin-angora/src/index.ts"],
+      "@angora-js/eslint-plugin-angora": ["./packages/eslint-plugin-angora/src/index.ts"]
     }
   },
 

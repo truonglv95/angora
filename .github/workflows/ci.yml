@@ -78,11 +78,15 @@ jobs:
       - name: Run TypeScript Tests
         run: bun test
 
-      - name: Run Full TCB Typecheck
-        run: bun run typecheck
-
       - name: Build All Monorepo Distribution Packages
         run: bun run build:packages
+
+      - name: Run Full TCB Typecheck
+        run: |
+          bun run typecheck || {
+            echo "::error title=TypecheckFailure::$(./node_modules/.bin/tsc --noEmit 2>&1 | tr '\n' ' ')"
+            exit 1
+          }
 
       - name: Verify Playground Build
         run: |
