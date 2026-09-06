@@ -1,0 +1,238 @@
+:root {
+  --bg-primary: #1e1e2e;
+  --bg-secondary: #252538;
+  --bg-card: #2f2f47;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --border: #383854;
+  --success: #10b981;
+  --warning: #f59e0b;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.angora-devtools {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.top-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+.logo {
+  font-size: 1.2rem;
+}
+.badge {
+  background: var(--accent);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  flex: 1;
+}
+.tab-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.tab-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+.tab-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.actions button {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.content-area {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+.tab-pane {
+  display: none;
+  height: 100%;
+  overflow-y: auto;
+  padding: 1rem;
+}
+.tab-pane.active {
+  display: block;
+}
+
+/* Split View for Components */
+.split-view {
+  display: flex;
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tree-sidebar {
+  width: 35%;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+.sidebar-header,
+.detail-header {
+  padding: 0.6rem 0.8rem;
+  background: var(--bg-card);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.tree-list {
+  list-style: none;
+  padding: 0.5rem;
+}
+.tree-item {
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.tree-item:hover {
+  background: var(--bg-card);
+}
+.tree-item.selected {
+  background: var(--accent);
+  color: white;
+}
+.detail-panel {
+  flex: 1;
+  background: var(--bg-primary);
+  padding: 1rem;
+  overflow-y: auto;
+}
+.empty-state {
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 2rem;
+  font-style: italic;
+}
+
+/* Signals Table */
+.signals-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8rem;
+}
+#signal-search {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  width: 250px;
+}
+.signals-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.signals-table th {
+  background: var(--bg-secondary);
+  padding: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.signals-table td {
+  padding: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Router & Profiler Cards */
+.router-summary,
+.profiler-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+.card-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.card-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--success);
+  margin-top: 0.25rem;
+}
+
+.stream-log {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 12px;
+}
+.stream-entry {
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+}

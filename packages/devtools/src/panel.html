@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Angora DevTools Panel</title>
+    <link rel="stylesheet" href="./panel.css" />
+  </head>
+  <body>
+    <div class="angora-devtools">
+      <header class="top-nav">
+        <div class="brand">
+          <span class="logo">🐾</span>
+          <span class="title">Angora DevTools</span>
+          <span class="badge">v2.0</span>
+        </div>
+        <nav class="tabs">
+          <button class="tab-btn active" data-tab="components">Components</button>
+          <button class="tab-btn" data-tab="signals">Signals & Reactivity</button>
+          <button class="tab-btn" data-tab="router">Router 2.0</button>
+          <button class="tab-btn" data-tab="profiler">Profiler</button>
+        </nav>
+        <div class="actions">
+          <button id="btn-refresh" title="Refresh State">🔄 Refresh</button>
+          <button id="btn-clear" title="Clear Timeline">🧹 Clear</button>
+        </div>
+      </header>
+
+      <main class="content-area">
+        <!-- Tab 1: Components Tree -->
+        <section id="tab-components" class="tab-pane active">
+          <div class="split-view">
+            <div class="tree-sidebar">
+              <div class="sidebar-header">Component Hierarchy</div>
+              <ul id="component-tree" class="tree-list">
+                <!-- Dynamically populated -->
+              </ul>
+            </div>
+            <div class="detail-panel">
+              <div class="detail-header">Component Inspector</div>
+              <div id="component-detail" class="detail-body">
+                <p class="empty-state">
+                  Select a component from the tree to inspect inputs, outputs, and signals.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tab 2: Signals & Reactivity -->
+        <section id="tab-signals" class="tab-pane">
+          <div class="signals-toolbar">
+            <input type="text" id="signal-search" placeholder="Search signals..." />
+            <span class="signal-count" id="signal-count">0 active signals</span>
+          </div>
+          <table class="signals-table">
+            <thead>
+              <tr>
+                <th>Signal Name / ID</th>
+                <th>Type</th>
+                <th>Current Value</th>
+                <th>Mutations</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="signals-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Tab 3: Router 2.0 -->
+        <section id="tab-router" class="tab-pane">
+          <div class="router-summary">
+            <div class="card">
+              <div class="card-title">Active Route</div>
+              <div class="card-value" id="router-active-route">/</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Navigation Status</div>
+              <div class="card-value" id="router-status">IDLE</div>
+            </div>
+          </div>
+          <div class="history-section">
+            <h3>Navigation Timeline</h3>
+            <ul id="router-history" class="timeline-list">
+              <!-- Dynamically populated -->
+            </ul>
+          </div>
+        </section>
+
+        <!-- Tab 4: Profiler -->
+        <section id="tab-profiler" class="tab-pane">
+          <div class="profiler-stats">
+            <div class="card">
+              <div class="card-title">Signal Updates / sec</div>
+              <div class="card-value" id="prof-signal-rate">0</div>
+            </div>
+            <div class="card">
+              <div class="card-title">DOM Node Clones</div>
+              <div class="card-value" id="prof-dom-clones">0</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Reconciliation Passes</div>
+              <div class="card-value" id="prof-reconcile-count">0</div>
+            </div>
+          </div>
+          <div class="event-timeline">
+            <h3>Real-time Mutation Stream</h3>
+            <div id="event-stream" class="stream-log">
+              <!-- Stream entries -->
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./panel.js"></script>
+  </body>
+</html>

@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-tests:
+    name: Rust Compiler Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates -> target
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run Rust unit & integration tests
+        run: cargo test --workspace --verbose
+
+  ts-tests-and-build:
+    name: TypeScript Tests & Package Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: rust-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates -> target
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Monorepo Dependencies
+        run: bun install
+
+      - name: Build Native OXC Compiler (angora_oxc)
+        run: cargo build --release
+
+      - name: Run Linter
+        run: bun run lint
+
+      - name: Run TypeScript Tests
+        run: bun test
+
+      - name: Run Full TCB Typecheck
+        run: bun run typecheck
+
+      - name: Build All Monorepo Distribution Packages
+        run: bun run build:packages
+
+      - name: Verify Playground Build
+        run: |
+          cd examples/playground
+          bun run build
+
+      - name: Run Krausest Benchmark Test Suite
+        run: |
+          cd benchmarks/krausest
+          bun test

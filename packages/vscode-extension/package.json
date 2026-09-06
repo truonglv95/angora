@@ -1,0 +1,78 @@
+{
+  "name": "angora-language-tools",
+  "displayName": "Angora Language Tools",
+  "description": "Language support, syntax highlighting and diagnostics for the Angora framework",
+  "version": "0.1.0",
+  "publisher": "angora",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Snippets"
+  ],
+  "main": "./dist/index.js",
+  "license": "MIT",
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:angora-template",
+    "onLanguage:html"
+  ],
+  "files": [
+    "dist",
+    "syntaxes",
+    "README.md",
+    "package.json"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "angora-template",
+        "aliases": [
+          "Angora Template"
+        ],
+        "extensions": [
+          ".angora"
+        ]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "angora-template",
+        "scopeName": "text.html.angora",
+        "path": "./syntaxes/angora-template.tmLanguage.json"
+      }
+    ]
+  },
+  "dependencies": {
+    "@angora-js/cli": "workspace:*",
+    "@angora-js/compiler": "workspace:*"
+  },
+  "scripts": {
+    "build": "bun build ./src/extension.ts --outfile ./dist/extension.js --target node --format cjs --external vscode",
+    "package": "bun run build && bunx @vscode/vsce package --no-dependencies --skip-license --allow-missing-repository",
+    "test": "bun test"
+  },
+  "author": "Angora Team <team@angora.dev>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angora-js/angora.git"
+  },
+  "bugs": {
+    "url": "https://github.com/angora-js/angora/issues"
+  },
+  "homepage": "https://angora.dev",
+  "publishConfig": {
+    "access": "public"
+  },
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  }
+}

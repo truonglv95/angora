@@ -1,0 +1,56 @@
+@use '../variables' as *;
+@use '../mixins' as *;
+
+.angora-accordion {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--angora-border-color, #{$angora-border-color});
+  border-radius: var(--angora-radius-md, #{$angora-radius-md});
+  overflow: hidden;
+
+  &-item {
+    border-bottom: 1px solid var(--angora-border-color, #{$angora-border-color});
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  &-header,
+  &-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--angora-spacing-md, #{$angora-spacing-md})
+      var(--angora-spacing-lg, #{$angora-spacing-lg});
+    background: var(--angora-surface, #{$angora-surface});
+    color: var(--angora-text-primary, #{$angora-text-primary});
+    font-size: var(--angora-font-size-base, #{$angora-font-size-base});
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    border: none;
+    text-align: left;
+    transition: background-color var(--angora-transition-fast, #{$angora-transition-fast});
+
+    &:hover {
+      background: var(--angora-surface-hover, #{$angora-surface-hover});
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &-content,
+  &-body {
+    padding: var(--angora-spacing-md, #{$angora-spacing-md})
+      var(--angora-spacing-lg, #{$angora-spacing-lg});
+    background: var(--angora-surface, #{$angora-surface});
+    color: var(--angora-text-secondary, #{$angora-text-secondary});
+    font-size: var(--angora-font-size-sm, #{$angora-font-size-sm});
+    line-height: 1.6;
+    border-top: 1px solid var(--angora-border-color, #{$angora-border-color});
+  }
+}

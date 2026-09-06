@@ -1,0 +1,74 @@
+@use '../variables' as *;
+@use '../mixins' as *;
+
+.angora-select {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  min-width: 160px;
+  font-family: var(--angora-font-family, #{$angora-font-family});
+
+  &__trigger,
+  &-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--angora-spacing-sm, #{$angora-spacing-sm})
+      var(--angora-spacing-md, #{$angora-spacing-md});
+    background: var(--angora-surface, #{$angora-surface});
+    color: var(--angora-text-primary, #{$angora-text-primary});
+    border: 1px solid var(--angora-border-color, #{$angora-border-color});
+    border-radius: var(--angora-radius-md, #{$angora-radius-md});
+    font-size: var(--angora-font-size-sm, #{$angora-font-size-sm});
+    cursor: pointer;
+    transition: border-color var(--angora-transition-fast, #{$angora-transition-fast});
+
+    &:hover {
+      border-color: var(--angora-primary, #{$angora-primary});
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__dropdown,
+  &-dropdown {
+    @include surface-panel(var(--angora-radius-md, #{$angora-radius-md}), 2);
+    position: absolute;
+    top: calc(100% + var(--angora-spacing-xs, #{$angora-spacing-xs}));
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: var(--angora-spacing-xs, #{$angora-spacing-xs}) 0;
+    list-style: none;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: var(--angora-z-dropdown, #{$angora-z-dropdown});
+  }
+
+  &__option,
+  &-option {
+    padding: var(--angora-spacing-sm, #{$angora-spacing-sm})
+      var(--angora-spacing-md, #{$angora-spacing-md});
+    font-size: var(--angora-font-size-sm, #{$angora-font-size-sm});
+    color: var(--angora-text-primary, #{$angora-text-primary});
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--angora-transition-fast, #{$angora-transition-fast});
+
+    &:hover,
+    &:focus {
+      background: var(--angora-surface-hover, #{$angora-surface-hover});
+      outline: none;
+    }
+
+    &.selected,
+    &--selected {
+      background: var(--angora-surface-active, #{$angora-surface-active});
+      color: var(--angora-primary, #{$angora-primary});
+      font-weight: 600;
+    }
+  }
+}

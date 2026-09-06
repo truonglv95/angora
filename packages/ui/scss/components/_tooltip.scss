@@ -1,0 +1,30 @@
+@use '../variables' as *;
+@use '../mixins' as *;
+
+.angora-tooltip {
+  position: absolute;
+  z-index: var(--angora-z-tooltip, #{$angora-z-tooltip});
+  padding: var(--angora-spacing-xs, #{$angora-spacing-xs})
+    var(--angora-spacing-sm, #{$angora-spacing-sm});
+  border-radius: var(--angora-radius-sm, #{$angora-radius-sm});
+  font-size: var(--angora-font-size-xs, #{$angora-font-size-xs});
+  font-family: var(--angora-font-family, #{$angora-font-family});
+  line-height: 1.3;
+  color: var(--angora-tooltip-color, #ffffff);
+  background: var(--angora-tooltip-bg, rgba(15, 23, 42, 0.9));
+  box-shadow: var(--angora-elevation-2, #{$angora-elevation-2});
+  pointer-events: none;
+  white-space: nowrap;
+  animation: angoraTooltipFadeIn var(--angora-transition-fast, #{$angora-transition-fast}) ease;
+}
+
+@keyframes angoraTooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "name": "@angora-js/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "angora": "./bin/angora.js"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@angora-js/compiler": "workspace:*",
+    "@angora-js/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "typescript": ">=7.0.0",
+    "vite": ">=8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "description": "Official command-line interface for Angora projects and code generators",
+  "author": "Angora Team <team@angora.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angora-js/angora.git"
+  },
+  "bugs": {
+    "url": "https://github.com/angora-js/angora/issues"
+  },
+  "homepage": "https://angora.dev",
+  "publishConfig": {
+    "access": "public"
+  }
+}

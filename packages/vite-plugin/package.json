@@ -1,0 +1,42 @@
+{
+  "name": "@angora-js/vite-plugin",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@angora-js/core": "workspace:*",
+    "@angora-js/compiler": "workspace:*"
+  },
+  "peerDependencies": {
+    "vite": ">=5.0.0"
+  },
+  "devDependencies": {
+    "vite": "^8.2.2"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "description": "Official Vite plugin with in-process native Rust OXC compiler bridge for Angora",
+  "author": "Angora Team <team@angora.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angora-js/angora.git"
+  },
+  "bugs": {
+    "url": "https://github.com/angora-js/angora/issues"
+  },
+  "homepage": "https://angora.dev",
+  "publishConfig": {
+    "access": "public"
+  }
+}

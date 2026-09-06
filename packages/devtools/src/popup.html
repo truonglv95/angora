@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Angora DevTools</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <div class="popup-container">
+      <header class="popup-header">
+        <div class="brand">
+          <span class="logo">🐾</span>
+          <span class="title">Angora DevTools</span>
+        </div>
+        <span class="version-badge" id="ext-version">v2.0</span>
+      </header>
+
+      <main class="popup-content">
+        <div id="status-card" class="status-card loading">
+          <div class="status-indicator">
+            <span class="dot" id="status-dot"></span>
+            <span class="status-text" id="status-text">Detecting Angora app...</span>
+          </div>
+          <p class="status-desc" id="status-desc">Analyzing current tab...</p>
+        </div>
+
+        <div id="app-stats" class="stats-grid" style="display: none">
+          <div class="stat-box">
+            <span class="stat-num" id="stat-components">0</span>
+            <span class="stat-label">Components</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num" id="stat-signals">0</span>
+            <span class="stat-label">Signals</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num" id="stat-route">/</span>
+            <span class="stat-label">Route</span>
+          </div>
+        </div>
+
+        <div class="hint-box">
+          <p class="hint-title">💡 How to inspect:</p>
+          <p class="hint-body">
+            Press <kbd>F12</kbd> (or <kbd>Cmd</kbd>+<kbd>Option</kbd>+<kbd>I</kbd>) and click the
+            <strong>🐾 Angora</strong> tab on DevTools.
+          </p>
+        </div>
+      </main>
+
+      <footer class="popup-footer">
+        <button id="btn-open-devtools" class="primary-btn">⚡ Open DevTools Panel</button>
+      </footer>
+    </div>
+
+    <script src="./popup.js"></script>
+  </body>
+</html>

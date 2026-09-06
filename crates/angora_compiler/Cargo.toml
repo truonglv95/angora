@@ -1,0 +1,36 @@
+[package]
+name = "angora_compiler"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance template and component compiler for @angora using OXC"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+oxc_allocator = "0.148.0"
+oxc_parser = "0.148.0"
+oxc_ast = "0.148.0"
+oxc_span = "0.148.0"
+oxc_codegen = "0.148.0"
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+
+[build-dependencies]
+napi-build = "2.1"
+
+[features]
+default = []
+napi-binding = ["dep:napi", "dep:napi-derive"]
+
+[dependencies.napi]
+version = "2.16"
+default-features = false
+features = ["napi4", "serde-json"]
+optional = true
+
+[dependencies.napi-derive]
+version = "2.16"
+optional = true

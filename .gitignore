@@ -1,0 +1,13 @@
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+target/
+**/target/
+.env
+.env.*
+.angora/
+**/.angora/
+.DS_Store
+**/.DS_Store
+*.tsbuildinfo

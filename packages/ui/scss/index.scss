@@ -1,0 +1,22 @@
+// ==============================================================
+// 🐾 @angora-js/ui - Master SCSS Entry Point
+// ==============================================================
+
+@forward 'variables';
+@forward 'functions';
+@forward 'mixins';
+
+@use 'variables' as vars;
+@use 'mixins' as mix;
+@use 'components/dialog';
+@use 'components/select';
+@use 'components/menu';
+@use 'components/toast';
+@use 'components/tabs';
+@use 'components/accordion';
+@use 'components/tooltip';
+
+/// Master theme injection mixin
+@mixin theme($custom-theme: ()) {
+  @include mix.root-theme-variables($custom-theme);
+}

@@ -1,0 +1,124 @@
+// ==========================================
+// 🐾 @angora-js/ui - Core Mixins
+// ==========================================
+
+@use 'variables' as *;
+@use 'functions' as *;
+@use 'sass:map';
+
+/// Box shadow elevation mixin
+@mixin elevation($level: 1) {
+  @if $level == 1 {
+    box-shadow: var(--angora-elevation-1, #{$angora-elevation-1});
+  } @else if $level == 2 {
+    box-shadow: var(--angora-elevation-2, #{$angora-elevation-2});
+  } @else if $level == 3 {
+    box-shadow: var(--angora-elevation-3, #{$angora-elevation-3});
+  } @else if $level == 4 {
+    box-shadow: var(--angora-elevation-4, #{$angora-elevation-4});
+  }
+}
+
+/// Accessible Focus Ring
+@mixin focus-ring($color: var(--angora-primary, #{$angora-primary})) {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--angora-surface, #{$angora-surface}),
+    0 0 0 4px #{$color};
+}
+
+/// Truncate long text with ellipsis
+@mixin truncate-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/// Center elements with flexbox
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/// Modal / Dialog Backdrop Overlay
+@mixin backdrop-overlay($z: $angora-z-backdrop) {
+  position: fixed;
+  inset: 0;
+  background: var(--angora-backdrop-bg, rgba(0, 0, 0, 0.45));
+  backdrop-filter: blur(2px);
+  z-index: #{$z};
+}
+
+/// Floating panel card styling
+@mixin surface-panel($radius: var(--angora-radius-md, #{$angora-radius-md}), $elevation: 2) {
+  background: var(--angora-surface, #{$angora-surface});
+  color: var(--angora-text-primary, #{$angora-text-primary});
+  border: 1px solid var(--angora-border-color, #{$angora-border-color});
+  border-radius: #{$radius};
+  @include elevation($elevation);
+}
+
+/// Button reset mixin
+@mixin button-reset {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/// Component Root CSS Variables Generator
+@mixin root-theme-variables($theme: ()) {
+  :root {
+    --angora-primary: #{map.get($theme, 'primary') or $angora-primary};
+    --angora-primary-hover: #{map.get($theme, 'primary-hover') or $angora-primary-hover};
+    --angora-primary-contrast: #{map.get($theme, 'primary-contrast') or $angora-primary-contrast};
+
+    --angora-success: #{map.get($theme, 'success') or $angora-success};
+    --angora-warning: #{map.get($theme, 'warning') or $angora-warning};
+    --angora-danger: #{map.get($theme, 'danger') or $angora-danger};
+    --angora-info: #{map.get($theme, 'info') or $angora-info};
+
+    --angora-surface: #{map.get($theme, 'surface') or $angora-surface};
+    --angora-surface-hover: #{map.get($theme, 'surface-hover') or $angora-surface-hover};
+    --angora-surface-active: #{map.get($theme, 'surface-active') or $angora-surface-active};
+    --angora-surface-muted: #{map.get($theme, 'surface-muted') or $angora-surface-muted};
+
+    --angora-text-primary: #{map.get($theme, 'text-primary') or $angora-text-primary};
+    --angora-text-secondary: #{map.get($theme, 'text-secondary') or $angora-text-secondary};
+    --angora-text-muted: #{map.get($theme, 'text-muted') or $angora-text-muted};
+
+    --angora-border-color: #{map.get($theme, 'border-color') or $angora-border-color};
+    --angora-border-focus: #{map.get($theme, 'border-focus') or $angora-border-focus};
+
+    --angora-radius-sm: #{map.get($theme, 'radius-sm') or $angora-radius-sm};
+    --angora-radius-md: #{map.get($theme, 'radius-md') or $angora-radius-md};
+    --angora-radius-lg: #{map.get($theme, 'radius-lg') or $angora-radius-lg};
+
+    --angora-elevation-1: #{$angora-elevation-1};
+    --angora-elevation-2: #{$angora-elevation-2};
+    --angora-elevation-3: #{$angora-elevation-3};
+    --angora-elevation-4: #{$angora-elevation-4};
+
+    --angora-transition: #{$angora-transition-base};
+  }
+
+  [data-theme='dark'],
+  .angora-dark {
+    --angora-surface: #{$angora-dark-surface};
+    --angora-surface-hover: #{$angora-dark-surface-hover};
+    --angora-surface-active: #{$angora-dark-surface-active};
+    --angora-surface-muted: #{$angora-dark-surface};
+    --angora-text-primary: #{$angora-dark-text-primary};
+    --angora-text-secondary: #{$angora-dark-text-secondary};
+    --angora-border-color: #{$angora-dark-border-color};
+    --angora-elevation-1: 0 1px 3px 0 rgb(0 0 0 / 0.3);
+    --angora-elevation-2: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+    --angora-elevation-3: 0 10px 15px -3px rgb(0 0 0 / 0.3);
+    --angora-elevation-4: 0 20px 25px -5px rgb(0 0 0 / 0.4);
+  }
+}

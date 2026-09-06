@@ -1,0 +1,50 @@
+@use '../variables' as *;
+@use '../mixins' as *;
+
+.angora-tab {
+  &-group {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  &-header {
+    display: flex;
+    border-bottom: 2px solid var(--angora-border-color, #{$angora-border-color});
+    gap: var(--angora-spacing-sm, #{$angora-spacing-sm});
+    position: relative;
+  }
+
+  &-button,
+  &[role='tab'] {
+    @include button-reset;
+    padding: var(--angora-spacing-sm, #{$angora-spacing-sm})
+      var(--angora-spacing-lg, #{$angora-spacing-lg});
+    font-size: var(--angora-font-size-sm, #{$angora-font-size-sm});
+    font-weight: 500;
+    color: var(--angora-text-secondary, #{$angora-text-secondary});
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition:
+      color var(--angora-transition-fast, #{$angora-transition-fast}),
+      border-color var(--angora-transition-fast, #{$angora-transition-fast});
+
+    &:hover {
+      color: var(--angora-text-primary, #{$angora-text-primary});
+    }
+
+    &[aria-selected='true'],
+    &.active {
+      color: var(--angora-primary, #{$angora-primary});
+      border-bottom-color: var(--angora-primary, #{$angora-primary});
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &-body {
+    padding: var(--angora-spacing-md, #{$angora-spacing-md}) 0;
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "@angora-js/devtools",
+  "version": "0.1.0",
+  "description": "Official Chrome DevTools browser extension and state inspector for Angora",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "scripts": {
+    "build": "bun run ./scripts/build.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@angora-js/core": "workspace:*",
+    "@angora-js/runtime": "workspace:*"
+  },
+  "author": "Angora Team <team@angora.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angora-js/angora.git"
+  },
+  "bugs": {
+    "url": "https://github.com/angora-js/angora/issues"
+  },
+  "homepage": "https://angora.dev",
+  "publishConfig": {
+    "access": "public"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  }
+}

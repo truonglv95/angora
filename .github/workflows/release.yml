@@ -1,0 +1,194 @@
+name: Release & Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (do not publish to npm)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build-binaries:
+    name: Build Native Binary (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: angora_oxc
+            pkg_name: compiler-darwin-arm64
+          - os: macos-13
+            target: x86_64-apple-darwin
+            binary_name: angora_oxc
+            pkg_name: compiler-darwin-x64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_name: angora_oxc
+            pkg_name: compiler-linux-x64-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary_name: angora_oxc.exe
+            pkg_name: compiler-win32-x64-msvc
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates -> target
+          key: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.pkg_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.binary_name }}
+
+  publish-native-packages:
+    name: Publish Native Packages
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package and Publish Platform Binaries
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          if [ -z "$VERSION" ] || [ "$VERSION" = "$GITHUB_REF" ]; then
+            VERSION="0.1.0"
+          fi
+
+          declare -A PKG_MAP=(
+            ["compiler-darwin-arm64"]="darwin:arm64:angora_oxc"
+            ["compiler-darwin-x64"]="darwin:x64:angora_oxc"
+            ["compiler-linux-x64-gnu"]="linux:x64:angora_oxc"
+            ["compiler-win32-x64-msvc"]="win32:x64:angora_oxc.exe"
+          )
+
+          for PKG in "${!PKG_MAP[@]}"; do
+            IFS=":" read -r OS ARCH BIN <<< "${PKG_MAP[$PKG]}"
+            DIR="dist-pkgs/@angora-js/$PKG"
+            mkdir -p "$DIR/bin"
+            cp "artifacts/$PKG/$BIN" "$DIR/bin/$BIN"
+            chmod +x "$DIR/bin/$BIN" || true
+
+            cat <<EOF > "$DIR/package.json"
+          {
+            "name": "@angora-js/$PKG",
+            "version": "$VERSION",
+            "description": "Prebuilt native OXC compiler binary for Angora ($OS-$ARCH)",
+            "os": ["$OS"],
+            "cpu": ["$ARCH"],
+            "main": "bin/$BIN",
+            "files": ["bin/$BIN"],
+            "license": "MIT",
+            "repository": {
+              "type": "git",
+              "url": "git+https://github.com/angora-js/angora.git"
+            },
+            "publishConfig": {
+              "access": "public"
+            }
+          }
+          EOF
+
+            echo "Prepared @angora-js/$PKG at version $VERSION"
+            if [ "$DRY_RUN" != "true" ] && [ -n "$NODE_AUTH_TOKEN" ]; then
+              cd "$DIR"
+              npm publish --access public --provenance || true
+              cd - > /dev/null
+            fi
+          done
+
+  publish-framework:
+    name: Build & Publish Framework Packages
+    needs: publish-native-packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node for npm publish
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build local Rust compiler for packaging
+        run: cargo build --release
+
+      - name: Build all package distributions (.js & .d.ts)
+        run: bun run build:packages
+
+      - name: Publish Packages to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run enabled. Skipping npm publish."
+          elif [ -n "$NODE_AUTH_TOKEN" ]; then
+            bun run release || true
+          else
+            echo "No NPM_TOKEN found. Skipping npm publish."
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          generate_release_notes: true

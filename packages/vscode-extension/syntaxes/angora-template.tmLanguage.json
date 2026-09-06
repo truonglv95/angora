@@ -1,0 +1,110 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Angora Template",
+  "scopeName": "text.html.angora",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#control-flow"
+    },
+    {
+      "include": "#interpolations"
+    },
+    {
+      "include": "#bindings"
+    },
+    {
+      "include": "text.html.basic"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.html.angora",
+          "begin": "<!--",
+          "end": "-->",
+          "captures": {
+            "0": { "name": "punctuation.definition.comment.html.angora" }
+          }
+        },
+        {
+          "name": "comment.block.ts.angora",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "captures": {
+            "0": { "name": "punctuation.definition.comment.angora" }
+          }
+        },
+        {
+          "name": "comment.line.double-slash.angora",
+          "match": "//.*$",
+          "captures": {
+            "0": { "name": "punctuation.definition.comment.angora" }
+          }
+        }
+      ]
+    },
+    "control-flow": {
+      "patterns": [
+        {
+          "name": "keyword.control.angora",
+          "match": "@(if|else if|else|for|empty|switch|case|default|defer|placeholder|loading|error)\\b"
+        },
+        {
+          "name": "keyword.other.track.angora",
+          "match": "\\b(track)\\b"
+        }
+      ]
+    },
+    "interpolations": {
+      "patterns": [
+        {
+          "name": "meta.interpolation.angora",
+          "begin": "{{",
+          "beginCaptures": {
+            "0": { "name": "punctuation.section.embedded.begin.angora" }
+          },
+          "end": "}}",
+          "endCaptures": {
+            "0": { "name": "punctuation.section.embedded.end.angora" }
+          },
+          "patterns": [
+            {
+              "name": "keyword.operator.pipe.angora",
+              "match": "\\|\\s*([a-zA-Z0-9_]+)",
+              "captures": {
+                "1": { "name": "support.function.pipe.angora" }
+              }
+            },
+            {
+              "include": "source.ts"
+            }
+          ]
+        }
+      ]
+    },
+    "bindings": {
+      "patterns": [
+        {
+          "name": "entity.other.attribute-name.two-way.angora",
+          "match": "\\[\\(([a-zA-Z0-9_-]+)\\)\\]"
+        },
+        {
+          "name": "entity.other.attribute-name.property.angora",
+          "match": "\\[([a-zA-Z0-9_.-]+)\\]"
+        },
+        {
+          "name": "entity.other.attribute-name.event.angora",
+          "match": "\\(([a-zA-Z0-9_.-]+)\\)"
+        },
+        {
+          "name": "entity.other.attribute-name.reference.angora",
+          "match": "#([a-zA-Z0-9_-]+)"
+        }
+      ]
+    }
+  }
+}

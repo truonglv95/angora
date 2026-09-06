@@ -1,0 +1,43 @@
+{
+  "name": "create-angora",
+  "version": "0.1.0",
+  "description": "Official project scaffolding CLI for creating new Angora applications in seconds",
+  "type": "module",
+  "bin": {
+    "create-angora": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "test": "bun test"
+  },
+  "keywords": [
+    "angora",
+    "cli",
+    "create-angora",
+    "scaffolding",
+    "starter",
+    "template"
+  ],
+  "author": "Angora Team <team@angora.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angora-js/angora.git"
+  },
+  "bugs": {
+    "url": "https://github.com/angora-js/angora/issues"
+  },
+  "homepage": "https://angora.dev",
+  "publishConfig": {
+    "access": "public"
+  },
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  }
+}

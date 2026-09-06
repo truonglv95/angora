@@ -1,0 +1,29 @@
+@use '../variables' as *;
+@use '../mixins' as *;
+
+@mixin dialog-panel-theme(
+  $bg: var(--angora-surface, #{$angora-surface}),
+  $radius: var(--angora-radius-lg, #{$angora-radius-lg})
+) {
+  background: #{$bg};
+  border-radius: #{$radius};
+  color: var(--angora-text-primary, #{$angora-text-primary});
+  @include elevation(4);
+}
+
+.angora-dialog-backdrop {
+  @include backdrop-overlay($angora-z-modal);
+  @include flex-center;
+  padding: var(--angora-spacing-md, #{$angora-spacing-md});
+}
+
+.angora-dialog-panel {
+  @include dialog-panel-theme;
+  padding: var(--angora-spacing-xl, #{$angora-spacing-xl});
+  min-width: 320px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid var(--angora-border-color, transparent);
+  transition: transform var(--angora-transition, #{$angora-transition-base});
+}

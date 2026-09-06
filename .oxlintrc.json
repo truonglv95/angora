@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2024": true
+  },
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "ignorePatterns": ["dist/**", "target/**", "node_modules/**", "crates/**"],
+  "rules": {
+    "no-undef": "off",
+    "no-unused-vars": "warn",
+    "typescript/no-explicit-any": "off"
+  }
+}

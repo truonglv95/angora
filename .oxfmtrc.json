@@ -1,0 +1,20 @@
+{
+  "semi": true,
+  "singleQuote": true,
+  "tabWidth": 2,
+  "trailingComma": "es5",
+  "printWidth": 100,
+  "arrowParens": "avoid",
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "node_modules/",
+    "dist/",
+    "target/",
+    ".husky/",
+    "bun.lock",
+    "*.log",
+    "*.toml",
+    "crates/",
+    "packages/vscode-extension/syntaxes/"
+  ]
+}

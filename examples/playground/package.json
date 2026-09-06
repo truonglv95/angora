@@ -1,0 +1,29 @@
+{
+  "name": "playground",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@angora-js/core": "workspace:*",
+    "@angora-js/runtime": "workspace:*",
+    "@angora-js/router": "workspace:*",
+    "@angora-js/forms": "workspace:*",
+    "@angora-js/ui": "workspace:*",
+    "@angora-js/rxjs-interop": "workspace:*",
+    "@angora-js/animations": "workspace:*",
+    "@angora-js/devtools": "workspace:*",
+    "@angora-js/query": "workspace:*",
+    "@angora-js/primitives": "workspace:*",
+    "@angora-js/i18n": "workspace:*"
+  },
+  "devDependencies": {
+    "@angora-js/vite-plugin": "workspace:*",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  }
+}

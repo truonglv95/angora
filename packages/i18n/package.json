@@ -1,0 +1,44 @@
+{
+  "name": "@angora-js/i18n",
+  "version": "0.1.0",
+  "description": "Signal-driven internationalization, ICU MessageFormat plurals/select, and locale-aware pipes",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "test": "bun test"
+  },
+  "keywords": [
+    "angora",
+    "i18n",
+    "internationalization",
+    "localization",
+    "icu",
+    "plural",
+    "signals"
+  ],
+  "author": "Angora Team <team@angora.dev>",
+  "license": "MIT",
+  "dependencies": {
+    "@angora-js/core": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angora-js/angora.git"
+  },
+  "bugs": {
+    "url": "https://github.com/angora-js/angora/issues"
+  },
+  "homepage": "https://angora.dev",
+  "publishConfig": {
+    "access": "public"
+  },
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  }
+}

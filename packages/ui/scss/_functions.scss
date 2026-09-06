@@ -1,0 +1,41 @@
+// ==========================================
+// 🐾 @angora-js/ui - SCSS Functions
+// ==========================================
+
+@use 'sass:math';
+@use 'sass:color';
+@use 'sass:map';
+
+/// Convert pixel values to rem units
+@function rem($px, $base: 16px) {
+  @if not math.is-unitless($px) {
+    $px: math.div($px, 1px);
+  }
+  @if not math.is-unitless($base) {
+    $base: math.div($base, 1px);
+  }
+  @return math.div($px, $base) * 1rem;
+}
+
+/// Tint a color by mixing with white
+@function tint($color, $weight: 50%) {
+  @return color.mix(#ffffff, $color, $weight);
+}
+
+/// Shade a color by mixing with black
+@function shade($color, $weight: 50%) {
+  @return color.mix(#000000, $color, $weight);
+}
+
+/// Safely retrieve nested map value
+@function map-deep-get($map, $keys...) {
+  @each $key in $keys {
+    $map: map.get($map, $key);
+  }
+  @return $map;
+}
+
+/// Generate CSS variable reference with fallback
+@function var-fallback($name, $fallback) {
+  @return var(--angora-#{$name}, #{$fallback});
+}

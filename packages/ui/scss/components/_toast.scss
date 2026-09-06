@@ -1,0 +1,59 @@
+@use '../variables' as *;
+@use '../mixins' as *;
+
+.angora-toast {
+  &-container {
+    position: fixed;
+    bottom: var(--angora-spacing-lg, #{$angora-spacing-lg});
+    right: var(--angora-spacing-lg, #{$angora-spacing-lg});
+    display: flex;
+    flex-direction: column;
+    gap: var(--angora-spacing-sm, #{$angora-spacing-sm});
+    z-index: var(--angora-z-toast, #{$angora-z-toast});
+    max-width: 380px;
+    width: 100%;
+    pointer-events: none;
+  }
+
+  &-item {
+    @include surface-panel(var(--angora-radius-md, #{$angora-radius-md}), 3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--angora-spacing-md, #{$angora-spacing-md})
+      var(--angora-spacing-lg, #{$angora-spacing-lg});
+    pointer-events: auto;
+    font-size: var(--angora-font-size-sm, #{$angora-font-size-sm});
+    line-height: 1.4;
+    transition:
+      transform var(--angora-transition-base, #{$angora-transition-base}),
+      opacity var(--angora-transition-base, #{$angora-transition-base});
+
+    &--info {
+      border-left: 4px solid var(--angora-info, #{$angora-info});
+    }
+
+    &--success {
+      border-left: 4px solid var(--angora-success, #{$angora-success});
+    }
+
+    &--warning {
+      border-left: 4px solid var(--angora-warning, #{$angora-warning});
+    }
+
+    &--error {
+      border-left: 4px solid var(--angora-danger, #{$angora-danger});
+    }
+  }
+
+  &-close {
+    @include button-reset;
+    margin-left: var(--angora-spacing-md, #{$angora-spacing-md});
+    color: var(--angora-text-muted, #{$angora-text-muted});
+    cursor: pointer;
+
+    &:hover {
+      color: var(--angora-text-primary, #{$angora-text-primary});
+    }
+  }
+}

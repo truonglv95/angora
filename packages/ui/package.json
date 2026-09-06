@@ -1,0 +1,38 @@
+{
+  "name": "@angora-js/ui",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./scss/*": "./dist/scss/*",
+    "./scss": "./dist/scss/index.scss"
+  },
+  "dependencies": {
+    "@angora-js/core": "workspace:*",
+    "@angora-js/runtime": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "description": "Accessible dialog, toast, select, tabs, menu, and SCSS design tokens for Angora",
+  "author": "Angora Team <team@angora.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angora-js/angora.git"
+  },
+  "bugs": {
+    "url": "https://github.com/angora-js/angora/issues"
+  },
+  "homepage": "https://angora.dev",
+  "publishConfig": {
+    "access": "public"
+  }
+}
