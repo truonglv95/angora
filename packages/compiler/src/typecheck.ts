@@ -68,10 +68,18 @@ export function findComponentFiles(dir: string, baseDir: string = dir): string[]
     'build',
     'coverage',
     '.cache',
+    'fixtures',
+    'cli',
+    'compiler',
     'create-angora',
+    'eslint-plugin-angora',
+    'prettier-plugin-angora',
+    'vscode-extension',
   ]);
 
   const results: string[] = [];
+  const compClassRegex =
+    /@Component\s*\(\s*\{[\s\S]*?\}\s*\)\s*(?:export\s+)?class\s+[A-Za-z0-9_$]+/;
 
   function scan(current: string) {
     if (!fs.existsSync(current)) return;
@@ -92,7 +100,7 @@ export function findComponentFiles(dir: string, baseDir: string = dir): string[]
         const fullPath = path.join(current, entry.name);
         try {
           const content = fs.readFileSync(fullPath, 'utf-8');
-          if (content.includes('@Component')) {
+          if (compClassRegex.test(content)) {
             results.push(fullPath);
           }
         } catch {

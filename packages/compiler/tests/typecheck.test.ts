@@ -68,7 +68,7 @@ describe('@angora-js/compiler - TypeScript 7 & Native Rust OXC Typecheck Pipelin
   });
 
   test('should detect template type errors on custom components and pipes with native tsc', async () => {
-    const testDir = path.resolve(rootDir, 'fixtures/typecheck-errors');
+    const testDir = path.resolve(rootDir, 'target/fixtures/typecheck-errors');
     fs.mkdirSync(path.join(testDir, 'src'), { recursive: true });
 
     let extendsPath = path
