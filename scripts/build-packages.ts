@@ -111,6 +111,9 @@ async function buildPackage(pkgName: string): Promise<BuildStats | null> {
     const defaultTsconfig = {
       extends: '../../tsconfig.json',
       compilerOptions: {
+        noEmit: false,
+        declaration: true,
+        emitDeclarationOnly: true,
         rootDir: './src',
         outDir: './dist',
       },
@@ -120,21 +123,11 @@ async function buildPackage(pkgName: string): Promise<BuildStats | null> {
   }
 
   let dtsCount = 0;
-  const tscRes = spawnSync(
-    'bun',
-    [
-      'tsc',
-      '-p',
-      tsconfigPath,
-      '--declaration',
-      '--emitDeclarationOnly',
-      '--noEmit',
-      'false',
-      '--outDir',
-      distDir,
-    ],
-    { cwd: pkgDir, stdio: 'pipe', encoding: 'utf8' }
-  );
+  const tscRes = spawnSync('bun', ['tsc', '-p', tsconfigPath], {
+    cwd: pkgDir,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
 
   if (!fs.existsSync(path.join(distDir, 'index.d.ts'))) {
     // Fallback: generate index.d.ts if declaration had differences
@@ -170,6 +163,22 @@ async function buildPackage(pkgName: string): Promise<BuildStats | null> {
   };
 }
 
+function cleanSrcDts() {
+  for (const pkg of PACKAGES_ORDER) {
+    const srcDir = path.join(PACKAGES_DIR, pkg, 'src');
+    if (fs.existsSync(srcDir)) {
+      const files = fs.readdirSync(srcDir, { recursive: true }) as string[];
+      for (const file of files) {
+        if (typeof file === 'string' && file.endsWith('.d.ts')) {
+          try {
+            fs.unlinkSync(path.join(srcDir, file));
+          } catch {}
+        }
+      }
+    }
+  }
+}
+
 async function run() {
   console.log('📦 Angora Framework — Multi-Package Distribution Builder');
   console.log('========================================================\n');
@@ -187,6 +196,8 @@ async function run() {
       console.log(`⏭️ Skipped`);
     }
   }
+
+  cleanSrcDts();
 
   const totalTime = Math.round(performance.now() - totalStart);
   console.log('\n========================================================');

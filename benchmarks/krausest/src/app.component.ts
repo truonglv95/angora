@@ -1,5 +1,5 @@
 import { Component, signal } from '@angora-js/core';
-import { buildData, type Row } from './store.ts';
+import { buildData, type Row } from './store';
 
 @Component({
   selector: 'app-benchmark',

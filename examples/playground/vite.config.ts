@@ -39,17 +39,7 @@ export default defineConfig({
       },
     }),
   ],
-  esbuild: {
-    target: 'es2022',
-    tsconfigRaw: {
-      compilerOptions: {
-        experimentalDecorators: true,
-        useDefineForClassFields: false,
-      },
-    },
-  },
   build: {
     target: 'es2022',
-    minify: 'esbuild',
   },
 });
