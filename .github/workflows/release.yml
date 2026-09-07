@@ -171,7 +171,9 @@ jobs:
         run: cargo build --release
 
       - name: Build all package distributions (.js & .d.ts)
-        run: bun run build:packages
+        run: |
+          bun run prepare:packages
+          bun run build:packages
 
       - name: Publish Packages to npm
         env:

@@ -68,6 +68,7 @@ function updatePackages() {
   const dirs = fs.readdirSync(PACKAGES_DIR);
 
   for (const dir of dirs) {
+    if (dir === 'vscode-extension') continue;
     const pkgJsonPath = path.join(PACKAGES_DIR, dir, 'package.json');
     if (!fs.existsSync(pkgJsonPath)) continue;
 
@@ -81,6 +82,7 @@ function updatePackages() {
     pkg.bugs = COMMON_METADATA.bugs;
     pkg.homepage = COMMON_METADATA.homepage;
     pkg.publishConfig = COMMON_METADATA.publishConfig;
+    pkg.files = ['dist'];
 
     pkg.main = './dist/index.js';
     pkg.module = './dist/index.js';
@@ -109,6 +111,7 @@ function updatePackages() {
       pkg.bin = {
         angora: './bin/angora.js',
       };
+      pkg.files = ['dist', 'bin'];
     }
 
     fs.writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n');

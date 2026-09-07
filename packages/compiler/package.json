@@ -31,5 +31,8 @@
   "homepage": "https://angora.dev",
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }
