@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Headless SSR, Web Streams streaming SSR, TransferState, and Event Replay hydration for Angora",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

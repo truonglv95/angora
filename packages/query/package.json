@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/query",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Signals-powered enterprise data fetching, SWR, optimistic mutations, and zero-waterfall SSR dehydration",
   "type": "module",
   "main": "./dist/index.js",

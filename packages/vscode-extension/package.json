@@ -2,7 +2,7 @@
   "name": "angora-language-tools",
   "displayName": "Angora Language Tools",
   "description": "Language support, syntax highlighting and diagnostics for the Angora framework",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "angora",
   "engines": {
     "vscode": "^1.80.0"

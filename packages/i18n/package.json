@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/i18n",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Signal-driven internationalization, ICU MessageFormat plurals/select, and locale-aware pipes",
   "type": "module",
   "main": "./dist/index.js",
