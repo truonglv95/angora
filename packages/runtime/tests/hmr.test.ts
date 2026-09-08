@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { Window } from 'happy-dom';
 import '@angora-js/compiler';
 import { Component, signal, model, input, viewChild, rootInjector } from '@angora-js/core';
@@ -26,6 +26,11 @@ describe('@angora-js/runtime - Fine-Grained HMR Engine', () => {
     doc = window.document as any;
     hmrRegistry.clear();
     clearInjectedStyles();
+    delete (globalThis as any).__ANGORA_DEVTOOLS_BACKEND__;
+  });
+
+  afterEach(() => {
+    delete (globalThis as any).__ANGORA_DEVTOOLS_BACKEND__;
   });
 
   test('should hot swap template and preserve fine-grained signal state', () => {
@@ -413,5 +418,115 @@ describe('@angora-js/runtime - Fine-Grained HMR Engine', () => {
     restoreSignalState(instance, snapshot);
     expect(count()).toBe(99);
     expect(form.value().name).toBe('Bob');
+  });
+
+  test('should hot swap root component mounted via bootstrapApplication and preserve state', () => {
+    const sourceId = '/src/app.component.ts';
+
+    @Component({
+      selector: 'app-root',
+      template: '',
+    })
+    class AppRootV1 {
+      static __sourceFile = sourceId;
+      theme = signal('light');
+    }
+    (AppRootV1 as any).ɵrender = (ctx: AppRootV1) => {
+      const main = doc.createElement('main');
+      main.className = 'theme-v1';
+      const text = doc.createTextNode('');
+      bindText(text, () => `Theme: ${ctx.theme()}`);
+      main.appendChild(text);
+      return [main];
+    };
+
+    const host = doc.createElement('div');
+    host.id = 'app';
+    doc.body.appendChild(host);
+
+    const { bootstrapApplication } = require('../src/bootstrap.ts');
+    const appInstance = bootstrapApplication(AppRootV1, host);
+    expect(appInstance).toBeDefined();
+    expect(host.innerHTML).toContain('Theme: light');
+
+    // Mutate state
+    appInstance.theme.set('dark');
+    expect(host.innerHTML).toContain('Theme: dark');
+
+    // V2 with new template
+    @Component({
+      selector: 'app-root',
+      template: '',
+    })
+    class AppRootV2 {
+      static __sourceFile = sourceId;
+      theme = signal('light');
+    }
+    (AppRootV2 as any).ɵrender = (ctx: AppRootV2) => {
+      const main = doc.createElement('main');
+      main.className = 'theme-v2';
+      const text = doc.createTextNode('');
+      bindText(text, () => `Active Darkmode: ${ctx.theme()}`);
+      main.appendChild(text);
+      return [main];
+    };
+
+    const res = applyHMRUpdate(sourceId, AppRootV2);
+    expect(res.updated).toBe(1);
+    expect(host.innerHTML).toContain('Active Darkmode: dark');
+    expect(host.querySelector('.theme-v2')).not.toBeNull();
+  });
+
+  test('should notify DevTools backend upon HMR update and refresh new signals', () => {
+    const sourceId = '/src/components/dashboard.ts';
+    const emittedEvents: any[] = [];
+    (globalThis as any).__ANGORA_DEVTOOLS_BACKEND__ = {
+      mode: 'full',
+      signals: new Map(),
+      components: new Map(),
+      emit: (evt: any) => emittedEvents.push(evt),
+      registerComponent: () => {},
+      unregisterComponent: () => {},
+      registerSignal: (id: string, name: string, val: any, compId: string) => {},
+      updateSignal: () => {},
+    };
+
+    @Component({
+      selector: 'app-dashboard',
+      template: '',
+    })
+    class DashboardV1 {
+      static __sourceFile = sourceId;
+      users = signal(5);
+    }
+    (DashboardV1 as any).ɵrender = (ctx: DashboardV1) => {
+      const div = doc.createElement('div');
+      return [div];
+    };
+
+    const host = doc.createElement('div');
+    doc.body.appendChild(host);
+
+    const ref = mountComponent(DashboardV1, host, null, rootInjector);
+    expect(ref).not.toBeNull();
+
+    // V2
+    @Component({
+      selector: 'app-dashboard',
+      template: '',
+    })
+    class DashboardV2 {
+      static __sourceFile = sourceId;
+      users = signal(5);
+      revenue = signal(1000);
+    }
+    (DashboardV2 as any).ɵrender = (DashboardV1 as any).ɵrender;
+
+    applyHMRUpdate(sourceId, DashboardV2);
+
+    const hmrEvent = emittedEvents.find(e => e.type === 'hmr:update');
+    expect(hmrEvent).toBeDefined();
+    expect(hmrEvent.payload.name).toBe('DashboardV2');
+    expect(hmrEvent.payload.instancesUpdated).toBe(1);
   });
 });

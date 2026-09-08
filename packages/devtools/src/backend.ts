@@ -44,6 +44,8 @@ export interface DevToolsEvent {
   type:
     | 'component:mount'
     | 'component:destroy'
+    | 'component:update'
+    | 'hmr:update'
     | 'signal:register'
     | 'signal:update'
     | 'route:change'
@@ -243,6 +245,23 @@ export class AngoraDevToolsBackend {
 
   public emit(event: DevToolsEvent): void {
     if (this.mode === 'disabled') return;
+
+    if (event.type === 'component:update' || event.type === 'hmr:update') {
+      const name = event.payload?.name;
+      const compId = event.payload?.id;
+      if (compId && this.components.has(compId)) {
+        const comp = this.components.get(compId)!;
+        comp.renderCount = (comp.renderCount || 1) + 1;
+        if (event.payload.durationMs) comp.lastRenderDuration = event.payload.durationMs;
+      } else if (name) {
+        for (const comp of this.components.values()) {
+          if (comp.name === name || comp.selector === name) {
+            comp.renderCount = (comp.renderCount || 1) + 1;
+            if (event.payload.durationMs) comp.lastRenderDuration = event.payload.durationMs;
+          }
+        }
+      }
+    }
 
     this.events.push(event);
     if (this.events.length > 200) this.events.shift();

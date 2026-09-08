@@ -113,4 +113,34 @@ describe('@angora-js/devtools - Chrome Extension DevTools Backend Engine', () =>
     expect(backend.activeRoute).toBe('/admin');
     expect(backend.events.some(e => e.type === 'route:change')).toBe(true);
   });
+
+  test('should handle component:update and hmr:update and increment renderCount', () => {
+    const backend = getDevToolsBackend();
+    backend.registerComponent({
+      id: 'comp_1',
+      name: 'Counter',
+      selector: 'app-counter',
+      children: [],
+      signals: {},
+      inputs: {},
+      outputs: [],
+    });
+
+    const comp = backend.components.get('comp_1');
+    expect(comp?.renderCount).toBe(1);
+
+    backend.emit({
+      type: 'hmr:update',
+      timestamp: Date.now(),
+      payload: {
+        id: 'comp_1',
+        name: 'Counter',
+        durationMs: 0.8,
+      },
+    });
+
+    expect(comp?.renderCount).toBe(2);
+    expect(comp?.lastRenderDuration).toBe(0.8);
+    expect(backend.events.some(e => e.type === 'hmr:update')).toBe(true);
+  });
 });

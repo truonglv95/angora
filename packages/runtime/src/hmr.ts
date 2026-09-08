@@ -1,6 +1,7 @@
 import type { MountedComponentRef } from './mount.ts';
 import { injectComponentStyles } from './styles.ts';
 import { getJITCompiler } from './bootstrap.ts';
+import { refreshComponentDevTools } from './devtools.ts';
 import { IS_VIEW_QUERY } from '@angora-js/core';
 
 export interface SignalSnapshot {
@@ -281,6 +282,9 @@ export function applyHMRUpdate(
       // Re-apply snapshot if any initial value reset occurred
       restoreSignalState(oldInstance, snapshot);
 
+      // Refresh DevTools inspection with any newly introduced signals
+      refreshComponentDevTools(oldInstance);
+
       // Update ref.componentType
       (ref as any).componentType = newComponentType;
 
@@ -295,6 +299,21 @@ export function applyHMRUpdate(
   console.log(
     `[Angora HMR] ⚡ Replaced <${name}> (${updatedCount} instance${updatedCount > 1 ? 's' : ''}, preserved ${totalPreserved} signal${totalPreserved !== 1 ? 's' : ''}) in ${duration}ms`
   );
+
+  const backend = (globalThis as any).__ANGORA_DEVTOOLS_BACKEND__;
+  if (backend && typeof backend.emit === 'function') {
+    backend.emit({
+      type: 'hmr:update',
+      timestamp: Date.now(),
+      payload: {
+        name,
+        selector: newComponentType.ɵcmp?.selector,
+        instancesUpdated: updatedCount,
+        preservedSignals: totalPreserved,
+        durationMs: Number(duration),
+      },
+    });
+  }
 
   return { updated: updatedCount, preservedSignals: totalPreserved };
 }

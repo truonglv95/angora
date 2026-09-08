@@ -14,7 +14,7 @@ import {
   DESTROY_REF,
   runWithDestroyRef,
 } from '@angora-js/core';
-import { getJITCompiler, attachComponentDevTools } from '@angora-js/runtime';
+import { getJITCompiler, attachComponentDevTools, hmrRegistry } from '@angora-js/runtime';
 import { Router } from './router.ts';
 import type { RouteMatch } from './types.ts';
 
@@ -152,6 +152,40 @@ export function createRouterOutlet(anchor: Comment): () => void {
           undefined
         );
         activeDevToolsCleanup = hookResult ? hookResult.destroy : null;
+
+        // Register routed component with HMR engine
+        const routedRef: any = {
+          instance,
+          hostElement: anchor.parentNode as HTMLElement,
+          injector: componentInjector,
+          destroy: () => {
+            hmrRegistry.unregister(componentType, routedRef);
+          },
+          rerender: (newRenderFn?: any) => {
+            const activeRenderFn =
+              newRenderFn || compType.ɵrender || compType.__angora_render__ || def?.render;
+            if (typeof activeRenderFn === 'function' && anchor.parentNode) {
+              for (const node of currentNodes) {
+                if (node.parentNode) node.parentNode.removeChild(node);
+              }
+              currentNodes = activeRenderFn(instance, componentInjector);
+              let refNode: Node = anchor;
+              for (const node of currentNodes) {
+                if (anchor.parentNode) {
+                  anchor.parentNode.insertBefore(node, refNode.nextSibling);
+                  refNode = node;
+                }
+              }
+            }
+          },
+          childNodes: currentNodes,
+          componentType,
+        };
+
+        hmrRegistry.register(componentType, routedRef);
+        destroyRef.onDestroy(() => {
+          hmrRegistry.unregister(componentType, routedRef);
+        });
       } catch (err) {
         console.error('[Angora RouterOutlet] Error mounting routed component:', err);
       }

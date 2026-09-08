@@ -14,7 +14,9 @@ import { injectComponentStyles } from './styles.ts';
 import * as deferExports from './defer.ts';
 import * as pipesExports from './pipes.ts';
 import * as mountExports from './mount.ts';
+import type { MountedComponentRef } from './mount.ts';
 import { attachComponentDevTools } from './devtools.ts';
+import { hmrRegistry } from './hmr.ts';
 
 export function getRuntimeScope() {
   return {
@@ -139,10 +141,17 @@ export function bootstrapApplication<T>(
     }
   }
 
+  let renderDestroyRef = new DefaultDestroyRef();
+  let renderInjector = new Injector(
+    [{ provide: DESTROY_REF, useValue: renderDestroyRef }],
+    componentInjector
+  );
+
+  let mountedNodes: Node[] = [];
   if (typeof renderFn === 'function') {
-    const nodes: Node[] = renderFn(instance, componentInjector);
+    mountedNodes = renderFn(instance, renderInjector);
     targetElement.innerHTML = '';
-    for (const node of nodes) {
+    for (const node of mountedNodes) {
       targetElement.appendChild(node);
     }
   } else {
@@ -151,27 +160,73 @@ export function bootstrapApplication<T>(
   }
 
   // Resolve viewChild queries
-  for (const key of Object.keys(instance as object)) {
-    const prop = (instance as any)[key];
-    if (prop && prop[IS_VIEW_QUERY]) {
-      const selector = prop.__selector;
-      const refVal = (instance as any)[selector];
-      if (refVal) {
-        prop.__set(refVal);
-      } else {
-        const found =
-          targetElement.querySelector(selector) ||
-          targetElement.querySelector(`[${selector}]`) ||
-          targetElement.querySelector(`#${selector}`);
-        if (found) prop.__set(found);
+  const resolveRootViewQueries = () => {
+    for (const key of Object.keys(instance as object)) {
+      const prop = (instance as any)[key];
+      if (prop && prop[IS_VIEW_QUERY]) {
+        const selector = prop.__selector;
+        const refVal = (instance as any)[selector];
+        if (refVal) {
+          prop.__set(refVal);
+        } else {
+          const found =
+            targetElement.querySelector(selector) ||
+            targetElement.querySelector(`[${selector}]`) ||
+            targetElement.querySelector(`#${selector}`);
+          if (found) prop.__set(found);
+        }
       }
     }
-  }
+  };
+
+  resolveRootViewQueries();
+
+  const rerender = (newRenderFn?: (ctx: any, inj: any) => Node[]) => {
+    const activeRenderFn =
+      newRenderFn || compType.ɵrender || compType.__angora_render__ || def?.render;
+    if (typeof activeRenderFn === 'function') {
+      try {
+        renderDestroyRef.destroy();
+      } catch (e) {
+        console.error('[Angora HMR] Error cleaning up root render scope:', e);
+      }
+      renderDestroyRef = new DefaultDestroyRef();
+      renderInjector = new Injector(
+        [{ provide: DESTROY_REF, useValue: renderDestroyRef }],
+        componentInjector
+      );
+      targetElement.innerHTML = '';
+      mountedNodes = activeRenderFn(instance, renderInjector);
+      for (const node of mountedNodes) {
+        targetElement.appendChild(node);
+      }
+      resolveRootViewQueries();
+    }
+  };
 
   // Call onInit hook if present
   if (typeof (instance as any).angoraOnInit === 'function') {
     (instance as any).angoraOnInit();
   }
+
+  const rootRef: MountedComponentRef<T> = {
+    instance,
+    hostElement: targetElement,
+    injector: componentInjector,
+    destroy: () => {
+      hmrRegistry.unregister(componentType, rootRef);
+      try {
+        renderDestroyRef.destroy();
+      } catch {}
+      destroyRef.destroy();
+      targetElement.innerHTML = '';
+    },
+    rerender,
+    childNodes: mountedNodes,
+    componentType,
+  };
+
+  hmrRegistry.register(componentType, rootRef);
 
   return instance;
 }

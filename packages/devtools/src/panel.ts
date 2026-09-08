@@ -126,6 +126,20 @@ class DevToolsPanelController {
         const comp = this.components.find(c => c.id === this.selectedComponentId);
         if (comp) this.renderComponentDetail(comp);
       }
+    } else if (event.type === 'component:update' || event.type === 'hmr:update') {
+      const name = event.payload?.name;
+      const compId = event.payload?.id;
+      for (const comp of this.components) {
+        if ((compId && comp.id === compId) || comp.name === name || comp.selector === name) {
+          comp.renderCount = (comp.renderCount || 1) + 1;
+          if (event.payload?.durationMs) comp.lastRenderDuration = event.payload.durationMs;
+        }
+      }
+      this.renderComponents();
+      if (this.selectedComponentId) {
+        const comp = this.components.find(c => c.id === this.selectedComponentId);
+        if (comp) this.renderComponentDetail(comp);
+      }
     } else if (event.type === 'route:change') {
       const el = document.getElementById('router-active-route');
       if (el) el.textContent = event.payload.route;

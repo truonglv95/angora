@@ -100,6 +100,44 @@ export function attachComponentDevTools(
         } catch {
           // Not a parameterless signal getter
         }
+      } else if (
+        prop &&
+        typeof prop === 'object' &&
+        typeof prop.rawValue === 'function' &&
+        isSignal(prop.value)
+      ) {
+        // Reactive Forms: FormGroup, FormRecord, FormControl
+        try {
+          const formVal = prop.rawValue();
+          signals[`${key}.value`] = formVal;
+          const sigIdVal = `sig_${compId}_${key}_value`;
+          backend.registerSignal(sigIdVal, `${key}.value`, formVal, false, compId);
+
+          if (backend.signals.has(sigIdVal)) {
+            (backend.signals.get(sigIdVal) as any).signalRef = {
+              set: (v: any) =>
+                typeof prop.patchValue === 'function' ? prop.patchValue(v) : prop.setValue(v),
+            };
+          }
+
+          const stopValEffect = effect(() => {
+            try {
+              backend.updateSignal(sigIdVal, prop.rawValue());
+            } catch {}
+          });
+          cleanups.push(stopValEffect);
+
+          if (isSignal(prop.status)) {
+            const sigIdStatus = `sig_${compId}_${key}_status`;
+            backend.registerSignal(sigIdStatus, `${key}.status`, prop.status(), true, compId);
+            const stopStatusEffect = effect(() => {
+              try {
+                backend.updateSignal(sigIdStatus, prop.status());
+              } catch {}
+            });
+            cleanups.push(stopStatusEffect);
+          }
+        } catch {}
       } else if (prop && typeof prop.subscribe === 'function') {
         outputs.push(key);
       } else {
@@ -121,6 +159,34 @@ export function attachComponentDevTools(
     outputs,
     template: debug?.template,
   });
+
+  // Attach refresh handler for HMR updates
+  const refresh = () => {
+    if (!instance || backend.mode === 'disabled') return;
+    for (const key of Object.getOwnPropertyNames(instance)) {
+      if (key.startsWith('__')) continue;
+      const prop = (instance as any)[key];
+      const sigId = `sig_${compId}_${key}`;
+      if (isSignal(prop) && !backend.signals.has(sigId)) {
+        try {
+          const currentVal = prop();
+          const isWritable =
+            typeof prop.set === 'function' || typeof (prop as any).__set === 'function';
+          backend.registerSignal(sigId, key, currentVal, !isWritable, compId);
+          if (isWritable && backend.signals.has(sigId)) {
+            (backend.signals.get(sigId) as any).signalRef = prop;
+          }
+          const stopEffect = effect(() => {
+            try {
+              backend.updateSignal(sigId, prop());
+            } catch {}
+          });
+          cleanups.push(stopEffect);
+        } catch {}
+      }
+    }
+  };
+  (instance as any).__angoraDevToolsRefresh__ = refresh;
 
   // Link child ID to parent component
   if (parentId && backend.components.has(parentId)) {
@@ -149,4 +215,13 @@ export function attachComponentDevTools(
   }
 
   return { compId, destroy };
+}
+
+/**
+ * Refreshes DevTools inspection for a component instance after an HMR update.
+ */
+export function refreshComponentDevTools(instance: any): void {
+  if (instance && typeof instance.__angoraDevToolsRefresh__ === 'function') {
+    instance.__angoraDevToolsRefresh__();
+  }
 }

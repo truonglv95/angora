@@ -291,7 +291,7 @@ export class Router {
       this.isNavigating.set(false);
       this.events.set({ type: 'NavigationEnd', url: fullPath });
 
-      if (typeof (globalThis as any).__ANGORA_DEVTOOLS_BACKEND__ !== 'undefined') {
+      if (typeof (globalThis as any).__ANGORA_DEVTOOLS_BACKEND__?.setRoute === 'function') {
         (globalThis as any).__ANGORA_DEVTOOLS_BACKEND__.setRoute(fullPath);
       }
     };
