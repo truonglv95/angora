@@ -384,22 +384,55 @@ Dev mode updates in Angora are **instantaneous ($< 1\text{ms}$)** and **never lo
 
 ---
 
+### 10. Time-Travel Debugging in DevTools
+
+Angora DevTools features a full-stack **Time-Travel Debugging Engine** directly attached to fine-grained signals:
+
+- ⏪ **Signal-Level Rewind**: Every signal mutation is recorded into a chronological history. Jump back to any previous step (`timeTravelSignal(id, stepIndex)`) and watch the DOM update fine-grained without reloading!
+- 🌐 **Whole-App State Reversion**: Revert all signals in the entire application to an exact point in time (`timeTravelToTimestamp(timestamp)`).
+- 🎮 **Interactive DevTools Panel**: Access the `⏪ Revert` button directly from both the **Signals & Reactivity** table and the **Component Detail** inspector.
+- 🚀 **Zero Production Footprint**: History logging and mutation tracking are automatically stripped in production mode.
+
+---
+
+### 11. Global Event Delegation & Automatic Event Batching
+
+To deliver blazing speed on large lists (1,000 to 10,000 items in `@for`):
+
+- 🎯 **Global Event Delegation**: All standard bubbling events (`click`, `dblclick`, `input`, `change`, `keydown`, `keyup`, `submit`, `pointerdown`, `pointerup`) are delegated to a single root `document` listener. Zero redundant `addEventListener` calls, saving massive browser memory.
+- ⚡ **Automatic Event Batching**: All event listeners bound via `(click)="fn()"` are automatically wrapped in `batch(() => fn())`. Mutating multiple signals in an event handler collapses into **1 single microtask DOM flush**, eliminating intermediate layout thrashing.
+- 🔍 **DOM Micro-Diffing**: Direct `node.nodeValue = str` and property caching avoids re-triggering browser style recalcs when signals emit unchanged values.
+- 🛡️ **Infinite Effect Protection (`NG0103`)**: Automatically detects recursive effect-to-signal feedback loops and safely throws `[Angora] NG0103: Infinite effect loop detected` after 100 iterations, protecting your browser tab from freezing.
+
+---
+
+### 12. Automatic Signal Debug Names in Dev Mode
+
+Never guess which component owns a signal:
+
+- In Development Mode (`isDevMode()`), every `signal()` and `computed()` without an explicit `{ name: '...' }` automatically receives an identifiable debug name (`signal#1`, `computed#1`).
+- When mounted on a component, the Runtime Inspector automatically prefixes the signal with its component class: `<CounterComponent.count>`, `<ProfileComponent.email>`, `<OrderForm.value>`.
+
+---
+
 ## 📊 Competitive Feature Matrix
 
-| Capability                 |            **@angora**             |     **Angular 19/20**      |      **React 19**       |       **Vue 3.5**       |     **Svelte 5**     | **SolidJS 1.8+**  |
-| :------------------------- | :--------------------------------: | :------------------------: | :---------------------: | :---------------------: | :------------------: | :---------------: |
-| **DOM Engine**             |       **Zero-VDOM (Clone)**        |   Incremental DOM (Ivy)    |    VDOM (Fiber Diff)    |       Hybrid VDOM       |  Zero-VDOM (Clone)   | Zero-VDOM (Clone) |
-| **Reactivity**             |     **Signals + linkedSignal**     |   Signals + linkedSignal   |    Hooks (Re-render)    |  Reactivity Transform   |   Runes (`$state`)   |  Signals + Memos  |
-| **Component Model**        |     **TS Class + Decorators**      |   TS Class + Decorators    |     Functional JSX      |  SFC `<script setup>`   |   `.svelte` Blocks   |  Functional JSX   |
-| **Compiler Speed**         |       **Rust OXC (<0.1ms)**        |    JS `ngtsc` (~3-8ms)     |       Babel / SWC       |   JS `@vue/compiler`    |     JS Compiler      |    Babel / SWC    |
-| **Typecheck Speed**        |     **Native Go TS7 (~679ms)**     |   Standard `tsc` (2-5s)    |     Standard `tsc`      |    `vue-tsc` (3-6s)     |    `svelte-check`    |  Standard `tsc`   |
-| **Dependency Injection**   |    **First-Class Hierarchical**    |  First-Class Hierarchical  |  Context API (Limited)  |    Provide / Inject     |     Context API      |    Context API    |
-| **Reactive Forms**         |    **Built-in FormGroup/Array**    |  Built-in FormGroup/Array  | 3rd Party (RHF/Formik)  | 3rd Party (VeeValidate) |      3rd Party       |     3rd Party     |
-| **Data Fetching (SWR)**    | **`@angora-js/query` (Built-in)**  |    3rd Party (TanStack)    | 3rd Party (React Query) |  3rd Party (TanStack)   |      3rd Party       | `createResource`  |
-| **100k Virtual Scrolling** |    **`@angora-js/primitives`**     |       `@angular/cdk`       |  3rd Party (TanStack)   |        3rd Party        |      3rd Party       |     3rd Party     |
-| **View Transitions**       |    **`withViewTransitions()`**     |  `withViewTransitions()`   |   ViewTransition API    |         Manual          | Built-in Transitions |     3rd Party     |
-| **Hot Module Replacement** | **Fine-Grained Signal HMR (<1ms)** | Fast Refresh / Full Reload |  Fast Refresh (Reset)   |    Vite HMR (Reset)     |      Svelte HMR      | Vite HMR (Reset)  |
-| **Gzip Core Size**         |            **~5.5 KB**             |        ~35 - 50 KB         |         ~45 KB          |         ~16 KB          |       ~5.0 KB        |      ~6.5 KB      |
+| Capability                 |            **@angora**             |     **Angular 19/20**      |      **React 19**       |       **Vue 3.5**       |     **Svelte 5**      |  **SolidJS 1.8+**  |
+| :------------------------- | :--------------------------------: | :------------------------: | :---------------------: | :---------------------: | :-------------------: | :----------------: |
+| **DOM Engine**             |       **Zero-VDOM (Clone)**        |   Incremental DOM (Ivy)    |    VDOM (Fiber Diff)    |       Hybrid VDOM       |   Zero-VDOM (Clone)   | Zero-VDOM (Clone)  |
+| **Reactivity**             |     **Signals + linkedSignal**     |   Signals + linkedSignal   |    Hooks (Re-render)    |  Reactivity Transform   |   Runes (`$state`)    |  Signals + Memos   |
+| **Component Model**        |     **TS Class + Decorators**      |   TS Class + Decorators    |     Functional JSX      |  SFC `<script setup>`   |   `.svelte` Blocks    |   Functional JSX   |
+| **Compiler Speed**         |       **Rust OXC (<0.1ms)**        |    JS `ngtsc` (~3-8ms)     |       Babel / SWC       |   JS `@vue/compiler`    |      JS Compiler      |    Babel / SWC     |
+| **Typecheck Speed**        |     **Native Go TS7 (~679ms)**     |   Standard `tsc` (2-5s)    |     Standard `tsc`      |    `vue-tsc` (3-6s)     |    `svelte-check`     |   Standard `tsc`   |
+| **Dependency Injection**   |    **First-Class Hierarchical**    |  First-Class Hierarchical  |  Context API (Limited)  |    Provide / Inject     |      Context API      |    Context API     |
+| **Reactive Forms**         |    **Built-in FormGroup/Array**    |  Built-in FormGroup/Array  | 3rd Party (RHF/Formik)  | 3rd Party (VeeValidate) |       3rd Party       |     3rd Party      |
+| **Data Fetching (SWR)**    | **`@angora-js/query` (Built-in)**  |    3rd Party (TanStack)    | 3rd Party (React Query) |  3rd Party (TanStack)   |       3rd Party       |  `createResource`  |
+| **100k Virtual Scrolling** |    **`@angora-js/primitives`**     |       `@angular/cdk`       |  3rd Party (TanStack)   |        3rd Party        |       3rd Party       |     3rd Party      |
+| **View Transitions**       |    **`withViewTransitions()`**     |  `withViewTransitions()`   |   ViewTransition API    |         Manual          | Built-in Transitions  |     3rd Party      |
+| **Event Delegation**       |  **Global Document (Automatic)**   |   Per-Element Listeners    |  Root Container (17+)   |  Per-Element Listeners  | Per-Element Listeners | Document Delegated |
+| **Time-Travel Debugging**  |  **Built-in Signal Time-Travel**   |            None            |  3rd Party (Redux Dev)  |    3rd Party (Pinia)    |         None          |        None        |
+| **Hot Module Replacement** | **Fine-Grained Signal HMR (<1ms)** | Fast Refresh / Full Reload |  Fast Refresh (Reset)   |    Vite HMR (Reset)     |      Svelte HMR       |  Vite HMR (Reset)  |
+| **Gzip Core Size**         |            **~5.5 KB**             |        ~35 - 50 KB         |         ~45 KB          |         ~16 KB          |        ~5.0 KB        |      ~6.5 KB       |
 
 ---
 

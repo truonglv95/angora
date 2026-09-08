@@ -10,6 +10,7 @@ import { UiDemoComponent } from '../src/views/ui-demo.component.ts';
 import { LazyAdminComponent } from '../src/views/lazy-admin.component.ts';
 import { AdvancedDemoComponent } from '../src/views/advanced-demo.component.ts';
 import { I18nDemoComponent } from '../src/views/i18n-demo.component.ts';
+import { TimeTravelDemoComponent } from '../src/views/timetravel-demo.component.ts';
 import { AppComponent } from '../src/app.component.ts';
 import { provideI18n, I18nService } from '@angora-js/i18n';
 
@@ -231,5 +232,51 @@ describe('🐾 Angora Enterprise Playground Integration Test', () => {
     expect(comp.currentLocale()).toBe('fr');
     comp.toggleLanguage();
     expect(comp.currentLocale()).toBe('en');
+  });
+
+  it('TimeTravelDemoComponent: should record mutations, advance steps, and time-travel back and forth', () => {
+    const fixture = renderComponent(TimeTravelDemoComponent);
+    const comp = fixture.componentInstance;
+
+    // Initial state
+    expect(comp.cartProducts().length).toBe(1);
+    expect(comp.walletBalance()).toBe(650);
+    expect(comp.totalAmount()).toBe(99);
+    expect(comp.currentStepIndex()).toBe(0);
+
+    // Mutation 1: add product
+    comp.addProduct('Mechanical Keyboard', 199);
+    expect(comp.cartProducts().length).toBe(2);
+    expect(comp.totalAmount()).toBe(298);
+    expect(comp.currentStepIndex()).toBe(1);
+
+    // Mutation 2: deposit money
+    comp.depositMoney(500);
+    expect(comp.walletBalance()).toBe(1150);
+    expect(comp.currentStepIndex()).toBe(2);
+
+    // Mutation 3: advance checkout step
+    comp.nextCheckoutStep();
+    expect(comp.checkoutStep()).toBe('shipping');
+    expect(comp.currentStepIndex()).toBe(3);
+
+    // TIME-TRAVEL: Revert back to Step 0 (Initial State)
+    comp.revertToStep(0);
+    expect(comp.cartProducts().length).toBe(1);
+    expect(comp.walletBalance()).toBe(650);
+    expect(comp.totalAmount()).toBe(99);
+    expect(comp.checkoutStep()).toBe('cart');
+    expect(comp.currentStepIndex()).toBe(0);
+
+    // TIME-TRAVEL: Step forward to Step 1
+    comp.stepForward();
+    expect(comp.cartProducts().length).toBe(2);
+    expect(comp.totalAmount()).toBe(298);
+    expect(comp.currentStepIndex()).toBe(1);
+
+    // Batched update
+    comp.triggerBatchedAction();
+    expect(comp.checkoutStep()).toBe('payment');
+    expect(comp.walletBalance()).toBe(750); // 650 + 100
   });
 });

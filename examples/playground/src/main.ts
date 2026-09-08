@@ -9,6 +9,7 @@ import { FormsDemoComponent } from './views/forms-demo.component.ts';
 import { UiDemoComponent } from './views/ui-demo.component.ts';
 import { AdvancedDemoComponent } from './views/advanced-demo.component.ts';
 import { I18nDemoComponent } from './views/i18n-demo.component.ts';
+import { TimeTravelDemoComponent } from './views/timetravel-demo.component.ts';
 import { enableClickToSourceInspector } from '@angora-js/runtime';
 
 // Enable Click-to-Source Inspector in development
@@ -24,6 +25,11 @@ const routes: Routes = [
     path: 'forms',
     component: FormsDemoComponent,
     title: 'Angora 2.0 - Reactive Forms & Dynamic FormArray',
+  },
+  {
+    path: 'timetravel',
+    component: TimeTravelDemoComponent,
+    title: 'Angora 2.0 - Time-Travel & DevTools Visualizer',
   },
   {
     path: 'ui',

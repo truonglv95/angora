@@ -30,6 +30,12 @@ import { I18nService } from '@angora-js/i18n';
           <button [class.active]="currentPath() === '/forms'" (click)="navigate('/forms')">
             📋 Reactive Forms
           </button>
+          <button
+            [class.active]="currentPath() === '/timetravel'"
+            (click)="navigate('/timetravel')"
+          >
+            ⏪ Time-Travel & DevTools
+          </button>
           <button [class.active]="currentPath() === '/ui'" (click)="navigate('/ui')">
             🎨 UI Suite & SCSS
           </button>
@@ -75,6 +81,8 @@ import { I18nService } from '@angora-js/i18n';
         <div class="tech-pills">
           <span class="badge badge-info">Fine-Grained Signals</span>
           <span class="badge badge-success">Zero VDOM</span>
+          <span class="badge badge-info">Time-Travel Debugging</span>
+          <span class="badge badge-success">Global Event Delegation</span>
           <span class="badge badge-info">SCSS Design Tokens</span>
           <span class="badge badge-warning">Native OXC / Rust</span>
           <span class="badge badge-success">Preloaded Router 2.0</span>

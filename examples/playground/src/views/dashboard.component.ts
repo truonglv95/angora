@@ -140,6 +140,16 @@ const liveStream$ = {
           <p style="font-size: 0.875rem; color: var(--angora-text-secondary); margin-top: 0.5rem;">
             Live bound preview: <strong>{{ quickNote() }}</strong>
           </p>
+
+          <div style="margin-top: 1.25rem; padding: 0.75rem; background: var(--angora-surface-muted); border-radius: 6px; font-size: 0.85rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+              <span class="badge badge-success" style="font-size: 0.7rem;">Global Event Delegation</span>
+              <span class="badge badge-info" style="font-size: 0.7rem;">Auto Batching</span>
+            </div>
+            <div style="color: var(--angora-text-secondary);">
+              All interactions delegate to root with zero redundant <code>addEventListener</code> calls. Signals are auto-named in DevTools as <code>&lt;DashboardComponent.count&gt;</code>.
+            </div>
+          </div>
         </div>
       </div>
 
