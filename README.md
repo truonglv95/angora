@@ -5,7 +5,8 @@
 ![Angora Architecture](https://img.shields.io/badge/Architecture-Zero--VDOM%20%7C%20Signals-6366f1?style=for-the-badge)
 ![Compiler](<https://img.shields.io/badge/Compiler-Native%20Rust%20OXC%20(%3C0.1ms)-f97316?style=for-the-badge>)
 ![Typecheck](https://img.shields.io/badge/Typecheck-TypeScript%207%20Native%20Go-10b981?style=for-the-badge)
-![Tests](<https://img.shields.io/badge/Tests-329%2F329%20PASS%20(100%25)-22c55e?style=for-the-badge>)
+![Tests](<https://img.shields.io/badge/Tests-333%2F333%20PASS%20(100%25)-22c55e?style=for-the-badge>)
+
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
 **The Next-Generation Zero-Virtual-DOM Frontend Platform.**  
@@ -223,38 +224,108 @@ export class ProductDetailComponent {
 
 ---
 
-### 7. Signal Forms (`@angora-js/forms`)
+### 7. Strictly-Typed Signal Forms (`@angora-js/forms`)
 
-Define reactive, type-safe forms in a fraction of the code of traditional reactive forms:
+Angora provides a **100% native, zero-dependency, strictly-typed reactive form engine** built on fine-grained signals. It combines Angular's enterprise form capabilities with TypeScript type-safety and SolidJS-grade performance:
+
+#### Model-First Strictly-Typed Forms (`form<TModel>()`):
 
 ```typescript
-import { form, required, email, minLength, bindForm } from '@angora-js/forms';
+import { form, required, email, min, type FormConfig } from '@angora-js/forms';
 
-const loginForm = form({
+interface UserProfile {
+  name: string;
+  email: string;
+  age: number;
+  role: 'admin' | 'user';
+  address: {
+    city: string;
+    zip: string;
+  };
+}
+
+// 1. TypeScript strictly type-checks configuration against UserProfile:
+const userForm = form<UserProfile>({
+  name: ['', required],
   email: ['', [required, email]],
-  password: ['', [required, minLength(8)]],
-  rememberMe: false, // auto-wrapped in FormControl
+  age: [18, min(18)],
+  role: 'user', // Inferred as FormControl<'admin' | 'user'>
+  address: {
+    city: ['', required],
+    zip: '10000',
+  },
 });
 
-// Direct property access & signal ergonomics:
-loginForm.email.set('alice@angora.dev');
-loginForm.email.update(val => val.trim());
+// 2. Direct property access & fine-grained signals:
+userForm.name.set('Alice'); // Strictly type-checked!
+userForm.address.city.set('Hanoi'); // Nested type-safe access!
+console.log(userForm.valid()); // boolean Signal
+console.log(userForm.value()); // Typed Signal<UserProfile>
 
-console.log(loginForm.valid()); // boolean Signal
-console.log(loginForm.email.errors()); // Signal: { required: true } | null
-console.log(loginForm.value()); // Signal: { email: '...', password: '...', rememberMe: false }
-
-// Reset all values back to defaults:
-loginForm.reset();
+// 3. Type-safe patchValue:
+userForm.patchValue({ age: 25, role: 'admin' });
 ```
 
-Zero-ceremony DOM binding with `bindForm`:
+#### Cross-Field Validation (Group Validators):
+
+```typescript
+interface RegisterForm {
+  password: string;
+  confirmPassword: string;
+}
+
+const registerForm = form<RegisterForm>(
+  {
+    password: ['', required],
+    confirmPassword: ['', required],
+  },
+  {
+    validators: [
+      group => {
+        const pass = group.password.value();
+        const confirm = group.confirmPassword.value();
+        return pass === confirm ? null : { passwordMismatch: true };
+      },
+    ],
+  }
+);
+
+console.log(registerForm.hasError('passwordMismatch')); // Reactive Signal
+```
+
+#### Control Disabled States & `rawValue()`:
+
+```typescript
+userForm.role.disable();
+console.log(userForm.role.disabled()); // Signal<boolean> -> true
+console.log(userForm.role.status()); // Signal<FormControlStatus> -> 'DISABLED'
+
+// form.value() automatically excludes disabled controls
+// form.rawValue() keeps all values regardless of disabled state
+console.log(userForm.rawValue());
+```
+
+#### Dynamic Dictionaries with `formRecord()`:
+
+```typescript
+import { formRecord, control } from '@angora-js/forms';
+
+const permissions = formRecord<boolean>({
+  read: true,
+  write: false,
+});
+
+permissions.addControl('delete', control(false));
+console.log(permissions.delete.value()); // false
+```
+
+#### Zero-Ceremony DOM Binding (`bindForm`):
 
 ```typescript
 // Automatically wires inputs by name, updates ng-valid/ng-dirty CSS classes,
 // marks all touched on submit, and invokes callback when valid:
-const unbind = bindForm(formElement, loginForm, values => {
-  console.log('Submitted:', values);
+const unbind = bindForm(formElement, userForm, values => {
+  console.log('Submitted valid form:', values);
 });
 ```
 
@@ -344,7 +415,7 @@ const addTodo = useMutation((title: string) => api.createTodo(title), {
 Angora runs an automated test matrix with 100% green status across all suites:
 
 - **35/35** Native Rust Compiler tests (`cargo test`)
-- **294/294** TypeScript tests across 40 files (`bun test`)
+- **298/298** TypeScript tests across 40 files (`bun test`)
 - **12/12** Official Stefan Krause js-framework-benchmark tests:
   - Create 1,000 rows DOM: **~52ms**
   - Replace 1,000 rows DOM: **~70ms**

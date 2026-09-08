@@ -22,6 +22,11 @@ export class FormControl<T = any> implements AbstractControl<T> {
   private asyncErrors: WritableSignal<ValidationErrors | null>;
   private asyncStatus: WritableSignal<FormControlStatus>;
 
+  private _disabled: WritableSignal<boolean>;
+  public disabled: Signal<boolean>;
+  public enabled: Signal<boolean>;
+  public rawValue: Signal<T>;
+
   public errors: Signal<ValidationErrors | null>;
   public status: Signal<FormControlStatus>;
   public valid: Signal<boolean>;
@@ -59,9 +64,13 @@ export class FormControl<T = any> implements AbstractControl<T> {
     }
 
     this.value = signal<T>(initialValue);
+    this.rawValue = this.value;
     this.dirty = signal<boolean>(false);
     this.touched = signal<boolean>(false);
     this.asyncErrors = signal<ValidationErrors | null>(null);
+    this._disabled = signal<boolean>(false);
+    this.disabled = computed(() => this._disabled());
+    this.enabled = computed(() => !this._disabled());
     this.asyncStatus = signal<FormControlStatus>(
       this.asyncValidatorList.length > 0 ? 'PENDING' : 'VALID'
     );
@@ -87,12 +96,13 @@ export class FormControl<T = any> implements AbstractControl<T> {
     });
 
     this.status = computed(() => {
+      if (this._disabled()) return 'DISABLED';
       if (this.syncErrors() !== null) return 'INVALID';
       if (this.asyncValidatorList.length > 0) return this.asyncStatus();
       return 'VALID';
     });
 
-    this.valid = computed(() => this.status() === 'VALID');
+    this.valid = computed(() => this.status() === 'VALID' || this.status() === 'DISABLED');
     this.invalid = computed(() => this.status() === 'INVALID');
     this.pending = computed(() => this.status() === 'PENDING');
     this.pristine = computed(() => !this.dirty());
@@ -178,6 +188,18 @@ export class FormControl<T = any> implements AbstractControl<T> {
     this.validatorList = validators;
     // Trigger recomputation of errors
     this.value.update(v => v);
+  }
+
+  public disable(): void {
+    this._disabled.set(true);
+  }
+
+  public enable(): void {
+    this._disabled.set(false);
+  }
+
+  public getRawValue(): T {
+    return this.value();
   }
 
   public hasError(errorCode: string): boolean {

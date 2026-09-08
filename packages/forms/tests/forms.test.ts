@@ -4,15 +4,18 @@ import {
   FormControl,
   FormGroup,
   FormArray,
+  FormRecord,
   Validators,
   bindControl,
   form,
   control,
   formArray,
+  formRecord,
   bindForm,
   required,
   email,
   minLength,
+  min,
 } from '../src/index.ts';
 
 describe('@angora-js/forms - Reactive Forms Engine', () => {
@@ -341,5 +344,161 @@ describe('@angora-js/forms - Reactive Forms Engine', () => {
     });
 
     unbind();
+  });
+
+  test('strictly-typed form<TModel>() enforces model types and direct property access', () => {
+    interface UserProfile {
+      name: string;
+      email: string;
+      age: number;
+      role: 'admin' | 'user';
+      address: {
+        city: string;
+        zip: string;
+      };
+      tags: string[];
+    }
+
+    const userForm = form<UserProfile>({
+      name: ['', required],
+      email: ['', [required, email]],
+      age: [18, min(18)],
+      role: 'user',
+      address: {
+        city: ['', required],
+        zip: '10000',
+      },
+      tags: ['angora', 'typescript'],
+    });
+
+    // Check strict typing and values
+    expect(userForm.valid()).toBe(false);
+    expect(userForm.role.value()).toBe('user');
+    expect(userForm.address.zip.value()).toBe('10000');
+
+    // Mutate with direct access
+    userForm.name.set('Alice');
+    userForm.email.set('alice@angora.dev');
+    userForm.address.city.set('Hanoi');
+
+    expect(userForm.valid()).toBe(true);
+
+    // Value matches interface
+    const val: UserProfile = userForm.value();
+    expect(val).toEqual({
+      name: 'Alice',
+      email: 'alice@angora.dev',
+      age: 18,
+      role: 'user',
+      address: {
+        city: 'Hanoi',
+        zip: '10000',
+      },
+      tags: ['angora', 'typescript'],
+    });
+
+    // Type-safe patchValue
+    userForm.patchValue({ age: 25, role: 'admin' });
+    expect(userForm.value().age).toBe(25);
+    expect(userForm.value().role).toBe('admin');
+  });
+
+  test('supports group-level validators for cross-field validation', () => {
+    interface RegisterForm {
+      password: string;
+      confirmPassword: string;
+    }
+
+    const registerForm = form<RegisterForm>(
+      {
+        password: ['', required],
+        confirmPassword: ['', required],
+      },
+      {
+        validators: [
+          group => {
+            const p = group.password.value();
+            const cp = group.confirmPassword.value();
+            return p === cp ? null : { passwordMismatch: true };
+          },
+        ],
+      }
+    );
+
+    registerForm.password.set('secret123');
+    registerForm.confirmPassword.set('different');
+
+    expect(registerForm.valid()).toBe(false);
+    expect(registerForm.hasError('passwordMismatch')).toBe(true);
+    expect(registerForm.getError('passwordMismatch')).toBe(true);
+
+    registerForm.confirmPassword.set('secret123');
+    expect(registerForm.valid()).toBe(true);
+    expect(registerForm.hasError('passwordMismatch')).toBe(false);
+  });
+
+  test('manages control disabled states, rawValue, and status', () => {
+    const profile = form({
+      username: ['alice', required],
+      role: ['guest', required],
+    });
+
+    expect(profile.valid()).toBe(true);
+    expect(profile.role.disabled()).toBe(false);
+    expect(profile.role.enabled()).toBe(true);
+
+    // Disable role control
+    profile.role.disable();
+    expect(profile.role.disabled()).toBe(true);
+    expect(profile.role.enabled()).toBe(false);
+    expect(profile.role.status()).toBe('DISABLED');
+
+    // form.value() excludes disabled controls
+    expect(profile.value()).toEqual({ username: 'alice' } as any);
+
+    // form.rawValue() keeps all controls
+    expect(profile.rawValue()).toEqual({ username: 'alice', role: 'guest' });
+    expect(profile.getRawValue()).toEqual({ username: 'alice', role: 'guest' });
+
+    // Enable again
+    profile.role.enable();
+    expect(profile.role.enabled()).toBe(true);
+    expect(profile.value()).toEqual({ username: 'alice', role: 'guest' });
+
+    // Disable entire form
+    profile.disable();
+    expect(profile.disabled()).toBe(true);
+    expect(profile.enabled()).toBe(false);
+    expect(profile.status()).toBe('DISABLED');
+
+    // Re-enable entire form
+    profile.enable();
+    expect(profile.disabled()).toBe(false);
+    expect(profile.enabled()).toBe(true);
+    expect(profile.status()).toBe('VALID');
+  });
+
+  test('formRecord manages dynamic dictionary of controls', () => {
+    const permissions = formRecord<boolean>({
+      read: true,
+      write: false,
+    });
+
+    expect(permissions.read.value()).toBe(true);
+    expect(permissions.write.value()).toBe(false);
+    expect(permissions.value()).toEqual({ read: true, write: false });
+
+    // Add dynamic control
+    permissions.addControl('delete', control(false));
+    expect(permissions.delete.value()).toBe(false);
+    expect(permissions.value()).toEqual({ read: true, write: false, delete: false });
+
+    // Modify dynamic control
+    permissions.delete.set(true);
+    expect(permissions.delete.value()).toBe(true);
+
+    // Remove control
+    permissions.removeControl('delete');
+    expect(permissions.value()).toEqual({ read: true, write: false });
   });
 });

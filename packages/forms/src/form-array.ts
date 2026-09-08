@@ -21,6 +21,7 @@ export class FormArray<
   public controls: Signal<TControl[]>;
   public length: Signal<number>;
   public value: Signal<any[]>;
+  public rawValue: Signal<any[]>;
   public valid: Signal<boolean>;
   public invalid: Signal<boolean>;
   public pending: Signal<boolean>;
@@ -28,6 +29,8 @@ export class FormArray<
   public touched: Signal<boolean>;
   public pristine: Signal<boolean>;
   public untouched: Signal<boolean>;
+  public disabled: Signal<boolean>;
+  public enabled: Signal<boolean>;
   public errors: Signal<ValidationErrors | null>;
   public status: Signal<FormControlStatus>;
 
@@ -44,8 +47,16 @@ export class FormArray<
     this.controls = computed(() => this._controls());
     this.length = computed(() => this._controls().length);
 
+    this.rawValue = computed(() => {
+      return this._controls().map(c =>
+        typeof (c as any).getRawValue === 'function' ? (c as any).getRawValue() : c.value()
+      );
+    });
+
     this.value = computed(() => {
-      return this._controls().map(c => c.value());
+      return this._controls()
+        .filter(c => c.status?.() !== 'DISABLED')
+        .map(c => c.value());
     });
 
     this.asyncErrors = signal<ValidationErrors | null>(null);
@@ -95,6 +106,9 @@ export class FormArray<
 
     this.status = computed(() => {
       const ctrls = this._controls();
+      if (ctrls.length > 0 && ctrls.every(c => c.status?.() === 'DISABLED')) {
+        return 'DISABLED';
+      }
       for (const c of ctrls) {
         if (c.status?.() === 'PENDING' || c.pending?.()) {
           return 'PENDING';
@@ -107,16 +121,18 @@ export class FormArray<
       if (syncErrors() !== null) return 'INVALID';
 
       for (const c of ctrls) {
-        if (c.invalid()) return 'INVALID';
+        if (c.status?.() !== 'DISABLED' && c.invalid()) return 'INVALID';
       }
 
       if (this.asyncValidatorList.length > 0) return this.asyncStatus();
       return 'VALID';
     });
 
-    this.valid = computed(() => this.status() === 'VALID');
+    this.valid = computed(() => this.status() === 'VALID' || this.status() === 'DISABLED');
     this.invalid = computed(() => this.status() === 'INVALID');
     this.pending = computed(() => this.status() === 'PENDING');
+    this.disabled = computed(() => this.status() === 'DISABLED');
+    this.enabled = computed(() => !this.disabled());
 
     this.dirty = computed(() => {
       return this._controls().some(c => c.dirty());
@@ -161,7 +177,7 @@ export class FormArray<
     }
   }
 
-  public at(index: number): AbstractControl<any> | undefined {
+  public at(index: number): TControl | undefined {
     return this._controls()[index];
   }
 
@@ -253,5 +269,17 @@ export class FormArray<
 
   public markAsUntouched(): void {
     this._controls().forEach(c => c.markAsUntouched());
+  }
+
+  public disable(): void {
+    this._controls().forEach(c => c.disable?.());
+  }
+
+  public enable(): void {
+    this._controls().forEach(c => c.enable?.());
+  }
+
+  public getRawValue(): any[] {
+    return this.rawValue();
   }
 }

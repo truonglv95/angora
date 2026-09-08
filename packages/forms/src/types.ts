@@ -5,6 +5,7 @@ export type FormControlStatus = 'VALID' | 'INVALID' | 'PENDING' | 'DISABLED';
 
 export interface AbstractControl<T = any> {
   value: Signal<T>;
+  rawValue?: Signal<T>;
   valid: Signal<boolean>;
   invalid: Signal<boolean>;
   dirty: Signal<boolean>;
@@ -14,6 +15,8 @@ export interface AbstractControl<T = any> {
   status: Signal<FormControlStatus>;
   errors: Signal<ValidationErrors | null>;
   pending?: Signal<boolean>;
+  disabled?: Signal<boolean>;
+  enabled?: Signal<boolean>;
 
   reset(value?: any): void;
   markAsDirty(): void;
@@ -22,4 +25,9 @@ export interface AbstractControl<T = any> {
   markAsUntouched(): void;
   patchValue(value: any): void;
   setValue?(value: any): void;
+  disable?(): void;
+  enable?(): void;
+  getRawValue?(): T;
+  hasError?(errorCode: string): boolean;
+  getError?(errorCode: string): any;
 }
