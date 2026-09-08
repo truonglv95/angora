@@ -13,3 +13,4 @@ target/
 *.tsbuildinfo
 packages/*/src/**/*.d.ts
 packages/*/src/*.d.ts
+*.vsix
