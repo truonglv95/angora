@@ -477,14 +477,12 @@ pub fn transform_component(source: &str) -> Result<String, String> {
   static ɵdir = {{
     selector: '{sel}',
     host: {host},
-    type: {cn},
     metadata: {{
       selector: '{sel}',
       host: {host},
     }},
   }};
 }}"#,
-                            cn = dir.class_name,
                             sel = dir.selector,
                             host = host_val
                         )
@@ -495,14 +493,12 @@ pub fn transform_component(source: &str) -> Result<String, String> {
   static ɵpipe = {{
     name: '{name}',
     pure: {pure},
-    type: {cn},
     metadata: {{
       name: '{name}',
       pure: {pure},
     }},
   }};
 }}"#,
-                            cn = pipe.class_name,
                             name = pipe.name,
                             pure = pipe.pure
                         )

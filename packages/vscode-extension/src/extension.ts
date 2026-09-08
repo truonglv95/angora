@@ -107,6 +107,38 @@ export function activate(context: any): void {
     }
     if (!vscode) return;
 
+    // Auto-detect native compiler binary in open workspace folders
+    try {
+      const fs = require('node:fs');
+      const path = require('node:path');
+      const exeName = process.platform === 'win32' ? 'angora_oxc.exe' : 'angora_oxc';
+      if (!process.env.ANGORA_OXC_BIN && vscode.workspace && vscode.workspace.workspaceFolders) {
+        for (const folder of vscode.workspace.workspaceFolders) {
+          const root = folder.uri.fsPath;
+          const candidates = [
+            path.join(root, 'target', 'release', exeName),
+            path.join(root, 'target', 'debug', exeName),
+            path.join(root, 'node_modules', '.bin', exeName),
+            path.join(
+              root,
+              'node_modules',
+              '@angora-js',
+              'compiler-' + process.platform + '-' + process.arch,
+              'bin',
+              exeName
+            ),
+          ];
+          for (const cand of candidates) {
+            if (fs.existsSync(cand)) {
+              process.env.ANGORA_OXC_BIN = cand;
+              break;
+            }
+          }
+          if (process.env.ANGORA_OXC_BIN) break;
+        }
+      }
+    } catch {}
+
     const diagnosticCollection = vscode.languages.createDiagnosticCollection('angora');
     context.subscriptions.push(diagnosticCollection);
 
@@ -127,7 +159,12 @@ export function activate(context: any): void {
         return;
       }
 
-      const diags = defaultService.getDiagnostics(document.uri.toString(), content);
+      let diags: any[] = [];
+      try {
+        diags = defaultService.getDiagnostics(document.uri.toString(), content);
+      } catch {
+        diags = [];
+      }
 
       const vsDiagnostics = diags.map(d => {
         const start = new vscode.Position(d.range.start.line, d.range.start.character);

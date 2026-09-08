@@ -61,8 +61,36 @@ async function buildPackage(pkgName: string): Promise<BuildStats | null> {
 
   const startTime = performance.now();
 
-  // 1. Bundle JavaScript via Bun Build
-  const externalArgs = EXTERNALS.flatMap(e => ['--external', e]);
+  // 1. Bundle JavaScript via Bun Build with native Angora OXC compiler transform
+  const bin = path.resolve(ROOT_DIR, 'target/release/angora_oxc');
+  const debugBin = path.resolve(ROOT_DIR, 'target/debug/angora_oxc');
+  const compilerBin = fs.existsSync(bin) ? bin : fs.existsSync(debugBin) ? debugBin : null;
+
+  const angoraOxcPlugin = {
+    name: 'angora-oxc-loader',
+    setup(build: any) {
+      build.onLoad({ filter: /\.(ts|js)$/ }, async (args: any) => {
+        if (!compilerBin) return undefined;
+        const code = await Bun.file(args.path).text();
+        if (
+          code.includes('@Component') ||
+          code.includes('@Directive') ||
+          code.includes('@Pipe') ||
+          code.includes('@Injectable')
+        ) {
+          const res = spawnSync(compilerBin, ['-', '--transform'], {
+            input: code,
+            encoding: 'utf8',
+          });
+          if (res.status === 0 && res.stdout) {
+            return { contents: res.stdout, loader: 'ts' };
+          }
+        }
+        return undefined;
+      });
+    },
+  };
+
   const isNodeOnly = [
     'compiler',
     'cli',
@@ -75,24 +103,17 @@ async function buildPackage(pkgName: string): Promise<BuildStats | null> {
   ].includes(pkgName);
   const target = isNodeOnly ? 'node' : 'browser';
 
-  const buildRes = spawnSync(
-    'bun',
-    [
-      'build',
-      srcIndex,
-      '--outdir',
-      distDir,
-      '--format',
-      'esm',
-      '--target',
-      target,
-      ...externalArgs,
-    ],
-    { cwd: pkgDir, stdio: 'pipe', encoding: 'utf8' }
-  );
+  const buildRes = await Bun.build({
+    entrypoints: [srcIndex],
+    outdir: distDir,
+    format: 'esm',
+    target: target as any,
+    external: EXTERNALS,
+    plugins: [angoraOxcPlugin],
+  });
 
-  if (buildRes.status !== 0) {
-    console.error(`❌ Failed to build JS for ${pkgName}:`, buildRes.stderr);
+  if (!buildRes.success) {
+    console.error(`❌ Failed to build JS for ${pkgName}:`, buildRes.logs);
     return null;
   }
 

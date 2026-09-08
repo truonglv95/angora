@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/query",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Signals-powered enterprise data fetching, SWR, optimistic mutations, and zero-waterfall SSR dehydration",
   "type": "module",
   "main": "./dist/index.js",
@@ -20,7 +20,7 @@
   "author": "Angora Team <team@angora.dev>",
   "license": "MIT",
   "dependencies": {
-    "@angora-js/core": "workspace:*"
+    "@angora-js/core": "^0.1.1"
   },
   "repository": {
     "type": "git",
@@ -43,5 +43,6 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "sideEffects": false
 }

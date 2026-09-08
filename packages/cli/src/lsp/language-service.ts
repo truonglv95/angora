@@ -120,52 +120,73 @@ export class AngoraLanguageService {
    * for a TypeScript or template document using 100% Native Rust OXC.
    */
   public getDiagnostics(uri: string, content: string): LspDiagnostic[] {
-    const rustDiags = getDiagnosticsWithRust(content, uri);
-    return rustDiags.map(d => ({
-      code: d.code,
-      message: d.message,
-      severity: d.severity as 'error' | 'warning' | 'info',
-      range: d.range,
-      source: d.source,
-    }));
+    try {
+      const rustDiags = getDiagnosticsWithRust(content, uri);
+      return rustDiags.map(d => ({
+        code: d.code,
+        message: d.message,
+        severity: d.severity as 'error' | 'warning' | 'info',
+        range: d.range,
+        source: d.source,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   /**
    * Provides rich hover information at cursor position using 100% Native Rust OXC.
    */
   public getHover(uri: string, content: string, position: LspPosition): LspHover | null {
-    const rustHover = getHoverWithRust(content, position.line, position.character, uri);
-    if (!rustHover) return null;
-    return {
-      contents: rustHover.contents,
-      range: rustHover.range,
-    };
+    try {
+      const rustHover = getHoverWithRust(content, position.line, position.character, uri);
+      if (!rustHover) return null;
+      return {
+        contents: rustHover.contents,
+        range: rustHover.range,
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**
    * Provides intelligent completions at cursor position using 100% Native Rust OXC.
    */
   public getCompletions(uri: string, content: string, position: LspPosition): LspCompletion[] {
-    const rustCompletions = getCompletionsWithRust(content, position.line, position.character, uri);
-    return rustCompletions.map(c => ({
-      label: c.label,
-      kind: c.kind as any,
-      detail: c.detail,
-      insertText: c.insertText,
-      documentation: c.documentation,
-      sortText: c.sortText,
-    }));
+    try {
+      const rustCompletions = getCompletionsWithRust(
+        content,
+        position.line,
+        position.character,
+        uri
+      );
+      return rustCompletions.map(c => ({
+        label: c.label,
+        kind: c.kind as any,
+        detail: c.detail,
+        insertText: c.insertText,
+        documentation: c.documentation,
+        sortText: c.sortText,
+      }));
+    } catch {
+      return BUILTIN_COMPLETIONS;
+    }
   }
 
   /**
    * Provides Go-to-Definition (F12) locations using 100% Native Rust OXC.
    */
   public getDefinition(uri: string, content: string, position: LspPosition): LspDefinition[] {
-    const rustDefs = getDefinitionWithRust(content, position.line, position.character, uri);
-    return rustDefs.map(d => ({
-      uri: d.uri,
-      range: d.range,
-      symbol: d.symbol,
-    }));
+    try {
+      const rustDefs = getDefinitionWithRust(content, position.line, position.character, uri);
+      return rustDefs.map(d => ({
+        uri: d.uri,
+        range: d.range,
+        symbol: d.symbol,
+      }));
+    } catch {
+      return [];
+    }
   }
 }

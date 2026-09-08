@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/forms",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Signal-powered reactive form controls, groups, dynamic FormArray, and async validation for Angora",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,5 +27,6 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "sideEffects": false
 }

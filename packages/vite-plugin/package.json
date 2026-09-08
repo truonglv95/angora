@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/vite-plugin",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -13,8 +13,8 @@
     }
   },
   "dependencies": {
-    "@angora-js/core": "workspace:*",
-    "@angora-js/compiler": "workspace:*"
+    "@angora-js/core": "^0.1.1",
+    "@angora-js/compiler": "^0.1.1"
   },
   "peerDependencies": {
     "vite": ">=5.0.0"
@@ -41,5 +41,6 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "sideEffects": false
 }

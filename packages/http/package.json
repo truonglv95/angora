@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/http",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Enterprise HTTP client with chainable interceptors and reactive resource adapter for Angora",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,5 +27,6 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "sideEffects": false
 }

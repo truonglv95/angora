@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/primitives",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Accessible WAI-ARIA 1.2 headless UI primitives and O(1) 100k-row virtual scrolling engine",
   "type": "module",
   "main": "./dist/index.js",
@@ -20,7 +20,7 @@
   "author": "Angora Team <team@angora.dev>",
   "license": "MIT",
   "dependencies": {
-    "@angora-js/core": "workspace:*"
+    "@angora-js/core": "^0.1.1"
   },
   "repository": {
     "type": "git",
@@ -43,5 +43,6 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "sideEffects": false
 }

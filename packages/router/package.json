@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/router",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -13,8 +13,8 @@
     }
   },
   "dependencies": {
-    "@angora-js/core": "workspace:*",
-    "@angora-js/runtime": "workspace:*"
+    "@angora-js/core": "^0.1.1",
+    "@angora-js/runtime": "^0.1.1"
   },
   "devDependencies": {
     "@angora-js/compiler": "workspace:*"
@@ -38,5 +38,6 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "sideEffects": false
 }

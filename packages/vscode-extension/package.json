@@ -2,7 +2,7 @@
   "name": "angora-language-tools",
   "displayName": "Angora Language Tools",
   "description": "Language support, syntax highlighting and diagnostics for the Angora framework",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "angora",
   "engines": {
     "vscode": "^1.80.0"
@@ -12,7 +12,7 @@
     "Linters",
     "Snippets"
   ],
-  "main": "./dist/index.js",
+  "main": "./dist/extension.js",
   "license": "MIT",
   "activationEvents": [
     "onLanguage:typescript",
@@ -46,8 +46,8 @@
     ]
   },
   "dependencies": {
-    "@angora-js/cli": "workspace:*",
-    "@angora-js/compiler": "workspace:*"
+    "@angora-js/cli": "^0.1.1",
+    "@angora-js/compiler": "^0.1.1"
   },
   "scripts": {
     "build": "bun build ./src/extension.ts --outfile ./dist/extension.js --target node --format cjs --external vscode",

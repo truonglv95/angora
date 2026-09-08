@@ -1,12 +1,6 @@
 import {
   Injector,
   rootInjector,
-  UpperCasePipe,
-  LowerCasePipe,
-  JsonPipe,
-  DatePipe,
-  CurrencyPipe,
-  SlicePipe,
   PIPE_DEF,
   COMPONENT_DEF,
   getComponentDef,
@@ -14,19 +8,18 @@ import {
   type PipeTransform,
 } from '@angora-js/core';
 
-const standardPipes: Record<string, new () => PipeTransform> = {
-  uppercase: UpperCasePipe,
-  lowercase: LowerCasePipe,
-  json: JsonPipe,
-  date: DatePipe,
-  currency: CurrencyPipe,
-  slice: SlicePipe,
-};
-
 const pipeInstancesCache = new WeakMap<any, Map<string, PipeTransform>>();
+const dynamicPipeRegistry = new Map<string, new () => PipeTransform>();
 
 /**
- * Resolves a pipe instance by name from the component imports or standard built-in pipes
+ * Registers a pipe class dynamically or globally
+ */
+export function registerPipe(name: string, pipe: new () => PipeTransform) {
+  dynamicPipeRegistry.set(name.toLowerCase(), pipe);
+}
+
+/**
+ * Resolves a pipe instance by name from the component imports or dynamic registry
  */
 export function resolvePipe(name: string, ctx?: any, injector?: Injector): PipeTransform {
   const normalizedName = name.toLowerCase();
@@ -53,23 +46,17 @@ export function resolvePipe(name: string, ctx?: any, injector?: Injector): PipeT
         }
       }
     }
-
-    // Standard built-in pipe
-    const Builtin = standardPipes[normalizedName];
-    if (Builtin) {
-      const pipeInstance = new Builtin();
-      instanceMap.set(normalizedName, pipeInstance);
-      return pipeInstance;
-    }
   }
 
-  const Builtin = standardPipes[normalizedName];
-  if (Builtin) {
-    return new Builtin();
+  // Check dynamic registry
+  const Registered = dynamicPipeRegistry.get(normalizedName);
+  if (Registered) {
+    return new Registered();
   }
 
+  const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
   throw new Error(
-    `[Angora Pipes] Pipe "${name}" not found. Ensure it is included in your component imports: [${name}Pipe].`
+    `[Angora Pipes] Pipe "${name}" not found. Ensure it is included in your component imports: [${capitalized}Pipe].`
   );
 }
 

@@ -42,22 +42,53 @@ export function findRustCompilerBinary(): string {
     return cachedBinaryPath;
   }
 
-  // 2. Try resolving from platform-specific optional dependency
+  // 2. Try resolving from platform-specific optional dependency (ESM & CommonJS)
   try {
     const pkgName = getPlatformPackageName();
-    if (typeof import.meta.resolve === 'function') {
-      const resolvedPkg = import.meta.resolve(pkgName);
-      if (resolvedPkg) {
-        const binInPkg = resolve(fileURLToPath(resolvedPkg), '../bin', exeName);
-        if (existsSync(binInPkg)) {
-          cachedBinaryPath = binInPkg;
-          return binInPkg;
+    let pkgDir: string | null = null;
+
+    if (typeof import.meta !== 'undefined' && typeof import.meta.resolve === 'function') {
+      try {
+        const resolvedPkg = import.meta.resolve(pkgName);
+        if (resolvedPkg) {
+          pkgDir = dirname(fileURLToPath(resolvedPkg));
+        }
+      } catch {}
+    }
+
+    if (!pkgDir && typeof require !== 'undefined' && typeof require.resolve === 'function') {
+      try {
+        const resolvedEntry = require.resolve(pkgName);
+        if (resolvedEntry) {
+          pkgDir = dirname(resolvedEntry);
+        }
+      } catch {}
+    }
+
+    if (pkgDir) {
+      const candidates = [resolve(pkgDir, 'bin', exeName), resolve(pkgDir, '../bin', exeName)];
+      for (const cand of candidates) {
+        if (existsSync(cand)) {
+          cachedBinaryPath = cand;
+          return cand;
         }
       }
     }
   } catch {}
 
-  // 3. Fallback to local build paths (monorepo & development)
+  // 3. Check node_modules in working directory
+  const nodeModulesCandidates = [
+    resolve(process.cwd(), 'node_modules', getPlatformPackageName(), 'bin', exeName),
+    resolve(process.cwd(), 'node_modules/.bin', exeName),
+  ];
+  for (const cand of nodeModulesCandidates) {
+    if (existsSync(cand)) {
+      cachedBinaryPath = cand;
+      return cand;
+    }
+  }
+
+  // 4. Fallback to local build paths (monorepo & development)
   const candidates = [
     resolve(currentDir, `../../target/release/${exeName}`),
     resolve(currentDir, `../../../target/release/${exeName}`),
@@ -83,6 +114,14 @@ export function findRustCompilerBinary(): string {
       'inside crates/angora_compiler to generate the binary, or install the platform package:\n' +
       `  npm install ${getPlatformPackageName()}`
   );
+}
+
+export function tryFindRustCompilerBinary(): string | null {
+  try {
+    return findRustCompilerBinary();
+  } catch {
+    return null;
+  }
 }
 
 import { verifyTemplateImports, type TemplateDiagnostic } from './validator.ts';

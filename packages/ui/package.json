@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/ui",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -15,8 +15,8 @@
     "./scss": "./dist/scss/index.scss"
   },
   "dependencies": {
-    "@angora-js/core": "workspace:*",
-    "@angora-js/runtime": "workspace:*"
+    "@angora-js/core": "^0.1.1",
+    "@angora-js/runtime": "^0.1.1"
   },
   "scripts": {
     "test": "bun test"
@@ -37,5 +37,10 @@
   },
   "files": [
     "dist"
+  ],
+  "sideEffects": [
+    "*.scss",
+    "*.css",
+    "dist/scss/**"
   ]
 }

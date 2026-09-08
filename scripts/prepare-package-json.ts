@@ -67,6 +67,9 @@ const PKG_DESCRIPTIONS: Record<string, string> = {
 function updatePackages() {
   const dirs = fs.readdirSync(PACKAGES_DIR);
 
+  const rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8'));
+  const currentVersion = rootPkg.version || '0.1.1';
+
   for (const dir of dirs) {
     if (dir === 'vscode-extension') continue;
     const pkgJsonPath = path.join(PACKAGES_DIR, dir, 'package.json');
@@ -83,6 +86,34 @@ function updatePackages() {
     pkg.homepage = COMMON_METADATA.homepage;
     pkg.publishConfig = COMMON_METADATA.publishConfig;
     pkg.files = ['dist'];
+
+    // Tree-shaking: declare sideEffects
+    if (dir === 'ui') {
+      pkg.sideEffects = ['*.scss', '*.css', 'dist/scss/**'];
+    } else {
+      pkg.sideEffects = false;
+    }
+
+    // Replace workspace:* protocols with real semver version for npm publish
+    for (const depType of ['dependencies', 'peerDependencies', 'optionalDependencies'] as const) {
+      if (pkg[depType]) {
+        for (const [dep, ver] of Object.entries(pkg[depType])) {
+          if (typeof ver === 'string' && (ver === 'workspace:*' || ver.startsWith('workspace:'))) {
+            pkg[depType][dep] = `^${currentVersion}`;
+          }
+        }
+      }
+    }
+
+    // Add native binary packages as optionalDependencies for compiler
+    if (dir === 'compiler') {
+      pkg.optionalDependencies = {
+        '@angora-js/compiler-darwin-arm64': `^${currentVersion}`,
+        '@angora-js/compiler-darwin-x64': `^${currentVersion}`,
+        '@angora-js/compiler-linux-x64-gnu': `^${currentVersion}`,
+        '@angora-js/compiler-win32-x64-msvc': `^${currentVersion}`,
+      };
+    }
 
     pkg.main = './dist/index.js';
     pkg.module = './dist/index.js';

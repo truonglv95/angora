@@ -13,7 +13,7 @@ import {
   CurrencyPipe,
   SlicePipe,
 } from '@angora-js/core';
-import { applyPipe, resolvePipe, applyDirective } from '@angora-js/runtime';
+import { applyPipe, resolvePipe, registerPipe, applyDirective } from '@angora-js/runtime';
 import { parseTemplate, compileTemplate } from '@angora-js/compiler';
 
 describe('@angora-js/runtime - Pipes Engine (| pipe)', () => {
@@ -26,6 +26,9 @@ describe('@angora-js/runtime - Pipes Engine (| pipe)', () => {
   });
 
   it('should resolve and execute built-in pipes via applyPipe', () => {
+    registerPipe('uppercase', UpperCasePipe);
+    registerPipe('slice', SlicePipe);
+
     const resUpper = applyPipe('uppercase', 'angora');
     expect(resUpper).toBe('ANGORA');
 
