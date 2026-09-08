@@ -145,13 +145,32 @@ export function angora(options: AngoraPluginOptions = {}): Plugin {
       }
 
       if (resultCode) {
-        if (isDev && options.inspector !== false) {
-          const compMatch = code.match(/class\s+([A-Za-z0-9_$]+)/);
-          if (compMatch) {
-            const compClassName = compMatch[1];
+        const classMatches = Array.from(code.matchAll(/class\s+([A-Za-z0-9_$]+)/g));
+        for (const match of classMatches) {
+          const compClassName = match[1];
+          if (isDev && options.inspector !== false) {
             resultCode += `\nif (typeof ${compClassName} !== 'undefined') { (${compClassName} as any).__sourceFile = ${JSON.stringify(cleanId)}; }\n`;
           }
         }
+
+        if (isDev && options.hmr !== false) {
+          resultCode += `
+if (import.meta.hot) {
+  import.meta.hot.accept((newMod) => {
+    if (newMod) {
+      import('@angora-js/runtime').then(({ applyHMRUpdate }) => {
+        for (const exp of Object.values(newMod)) {
+          if (typeof exp === 'function' && ((exp as any).ɵcmp || (exp as any).ɵrender || (exp as any).__angora_render__)) {
+            applyHMRUpdate(${JSON.stringify(cleanId)}, exp);
+          }
+        }
+      });
+    }
+  });
+}
+`;
+        }
+
         return {
           code: resultCode,
           map: null,

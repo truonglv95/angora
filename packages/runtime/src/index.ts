@@ -9,6 +9,7 @@ import * as directivesExports from './directives.ts';
 import * as errorBoundaryExports from './error-boundary.ts';
 import * as devtoolsExports from './devtools.ts';
 import * as inspectorExports from './inspector.ts';
+import * as hmrExports from './hmr.ts';
 
 export * from './dom.ts';
 export * from './control-flow.ts';
@@ -21,6 +22,7 @@ export * from './directives.ts';
 export * from './error-boundary.ts';
 export * from './devtools.ts';
 export * from './inspector.ts';
+export * from './hmr.ts';
 
 const runtimeScope = {
   ...domExports,
@@ -34,6 +36,7 @@ const runtimeScope = {
   ...errorBoundaryExports,
   ...devtoolsExports,
   ...inspectorExports,
+  ...hmrExports,
 };
 
 (globalThis as any).__ANGORA_RUNTIME__ = runtimeScope;

@@ -8,13 +8,17 @@ const injectedStylesMap = new Map<string, string>();
  * Injects scoped component CSS into the document <head>
  * Deduplicates multiple instances of the same component
  */
-export function injectComponentStyles(scopeId: string, css: string): void {
+export function injectComponentStyles(
+  scopeId: string,
+  css: string,
+  forceUpdate: boolean = false
+): void {
   if (!css || !css.trim()) return;
 
   const styleId = `angora-style-${scopeId}`;
   injectedStylesMap.set(scopeId, css);
 
-  if (injectedStyleIds.has(styleId)) {
+  if (injectedStyleIds.has(styleId) && !forceUpdate) {
     return;
   }
 
@@ -22,14 +26,14 @@ export function injectComponentStyles(scopeId: string, css: string): void {
 
   // In browser/DOM environment (including happy-dom)
   if (typeof document !== 'undefined' && document.head) {
-    const existing = document.getElementById(styleId);
-    if (!existing) {
-      const styleEl = document.createElement('style');
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
       styleEl.id = styleId;
       styleEl.setAttribute('data-angora-scope', scopeId);
-      styleEl.textContent = css;
       document.head.appendChild(styleEl);
     }
+    styleEl.textContent = css;
   }
 }
 

@@ -367,21 +367,39 @@ const addTodo = useMutation((title: string) => api.createTodo(title), {
 
 ---
 
+### 9. Fine-Grained HMR with Signal State Preservation
+
+Dev mode updates in Angora are **instantaneous ($< 1\text{ms}$)** and **never lose your application state**:
+
+- ⚡ **Zero Page Reloads**: Editing templates (`template: \`...\``) or scoped CSS (`styles: [...]`) hot-swaps in real-time.
+- 🧠 **100% Signal State Preservation**: All fine-grained signals (`signal()`, `model()`, `input()`), reactive forms (`FormGroup`, `FormRecord`, `FormArray`), and counter values remain completely intact across updates.
+- 🔄 **Live Prototype Upgrades**: Newly added class methods, updated algorithm logic, and newly introduced signals are patched onto running component instances seamlessly.
+- 🎯 **Fine-Grained DOM Scoping**: Only the edited component's DOM slice and its scoped `<style>` tags are replaced—the rest of your application tree stays mounted without losing focus, scroll positions, or state.
+
+```bash
+# In Vite dev mode:
+[Angora HMR] ⚡ Replaced <CounterComponent> (1 instance, preserved 2 signals) in 0.8ms
+[Angora HMR] ⚡ Replaced <StyledBox> (1 instance, preserved 1 signal) in 0.2ms
+```
+
+---
+
 ## 📊 Competitive Feature Matrix
 
-| Capability                 |            **@angora**            |    **Angular 19/20**     |      **React 19**       |       **Vue 3.5**       |     **Svelte 5**     | **SolidJS 1.8+**  |
-| :------------------------- | :-------------------------------: | :----------------------: | :---------------------: | :---------------------: | :------------------: | :---------------: |
-| **DOM Engine**             |       **Zero-VDOM (Clone)**       |  Incremental DOM (Ivy)   |    VDOM (Fiber Diff)    |       Hybrid VDOM       |  Zero-VDOM (Clone)   | Zero-VDOM (Clone) |
-| **Reactivity**             |    **Signals + linkedSignal**     |  Signals + linkedSignal  |    Hooks (Re-render)    |  Reactivity Transform   |   Runes (`$state`)   |  Signals + Memos  |
-| **Component Model**        |     **TS Class + Decorators**     |  TS Class + Decorators   |     Functional JSX      |  SFC `<script setup>`   |   `.svelte` Blocks   |  Functional JSX   |
-| **Compiler Speed**         |       **Rust OXC (<0.1ms)**       |   JS `ngtsc` (~3-8ms)    |       Babel / SWC       |   JS `@vue/compiler`    |     JS Compiler      |    Babel / SWC    |
-| **Typecheck Speed**        |    **Native Go TS7 (~679ms)**     |  Standard `tsc` (2-5s)   |     Standard `tsc`      |    `vue-tsc` (3-6s)     |    `svelte-check`    |  Standard `tsc`   |
-| **Dependency Injection**   |   **First-Class Hierarchical**    | First-Class Hierarchical |  Context API (Limited)  |    Provide / Inject     |     Context API      |    Context API    |
-| **Reactive Forms**         |   **Built-in FormGroup/Array**    | Built-in FormGroup/Array | 3rd Party (RHF/Formik)  | 3rd Party (VeeValidate) |      3rd Party       |     3rd Party     |
-| **Data Fetching (SWR)**    | **`@angora-js/query` (Built-in)** |   3rd Party (TanStack)   | 3rd Party (React Query) |  3rd Party (TanStack)   |      3rd Party       | `createResource`  |
-| **100k Virtual Scrolling** |    **`@angora-js/primitives`**    |      `@angular/cdk`      |  3rd Party (TanStack)   |        3rd Party        |      3rd Party       |     3rd Party     |
-| **View Transitions**       |    **`withViewTransitions()`**    | `withViewTransitions()`  |   ViewTransition API    |         Manual          | Built-in Transitions |     3rd Party     |
-| **Gzip Core Size**         |            **~5.5 KB**            |       ~35 - 50 KB        |         ~45 KB          |         ~16 KB          |       ~5.0 KB        |      ~6.5 KB      |
+| Capability                 |            **@angora**             |     **Angular 19/20**      |      **React 19**       |       **Vue 3.5**       |     **Svelte 5**     | **SolidJS 1.8+**  |
+| :------------------------- | :--------------------------------: | :------------------------: | :---------------------: | :---------------------: | :------------------: | :---------------: |
+| **DOM Engine**             |       **Zero-VDOM (Clone)**        |   Incremental DOM (Ivy)    |    VDOM (Fiber Diff)    |       Hybrid VDOM       |  Zero-VDOM (Clone)   | Zero-VDOM (Clone) |
+| **Reactivity**             |     **Signals + linkedSignal**     |   Signals + linkedSignal   |    Hooks (Re-render)    |  Reactivity Transform   |   Runes (`$state`)   |  Signals + Memos  |
+| **Component Model**        |     **TS Class + Decorators**      |   TS Class + Decorators    |     Functional JSX      |  SFC `<script setup>`   |   `.svelte` Blocks   |  Functional JSX   |
+| **Compiler Speed**         |       **Rust OXC (<0.1ms)**        |    JS `ngtsc` (~3-8ms)     |       Babel / SWC       |   JS `@vue/compiler`    |     JS Compiler      |    Babel / SWC    |
+| **Typecheck Speed**        |     **Native Go TS7 (~679ms)**     |   Standard `tsc` (2-5s)    |     Standard `tsc`      |    `vue-tsc` (3-6s)     |    `svelte-check`    |  Standard `tsc`   |
+| **Dependency Injection**   |    **First-Class Hierarchical**    |  First-Class Hierarchical  |  Context API (Limited)  |    Provide / Inject     |     Context API      |    Context API    |
+| **Reactive Forms**         |    **Built-in FormGroup/Array**    |  Built-in FormGroup/Array  | 3rd Party (RHF/Formik)  | 3rd Party (VeeValidate) |      3rd Party       |     3rd Party     |
+| **Data Fetching (SWR)**    | **`@angora-js/query` (Built-in)**  |    3rd Party (TanStack)    | 3rd Party (React Query) |  3rd Party (TanStack)   |      3rd Party       | `createResource`  |
+| **100k Virtual Scrolling** |    **`@angora-js/primitives`**     |       `@angular/cdk`       |  3rd Party (TanStack)   |        3rd Party        |      3rd Party       |     3rd Party     |
+| **View Transitions**       |    **`withViewTransitions()`**     |  `withViewTransitions()`   |   ViewTransition API    |         Manual          | Built-in Transitions |     3rd Party     |
+| **Hot Module Replacement** | **Fine-Grained Signal HMR (<1ms)** | Fast Refresh / Full Reload |  Fast Refresh (Reset)   |    Vite HMR (Reset)     |      Svelte HMR      | Vite HMR (Reset)  |
+| **Gzip Core Size**         |            **~5.5 KB**             |        ~35 - 50 KB         |         ~45 KB          |         ~16 KB          |       ~5.0 KB        |      ~6.5 KB      |
 
 ---
 

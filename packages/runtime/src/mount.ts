@@ -14,6 +14,7 @@ import { getJITCompiler } from './bootstrap.ts';
 import { injectComponentStyles } from './styles.ts';
 import { attachComponentDevTools } from './devtools.ts';
 import { applyMatchingDirectives } from './directives.ts';
+import { hmrRegistry } from './hmr.ts';
 
 export interface MountComponentOptions {
   inputs?: Record<string, () => any>;
@@ -26,6 +27,9 @@ export interface MountedComponentRef<T = any> {
   hostElement: HTMLElement;
   injector: Injector;
   destroy: () => void;
+  rerender?: (newRenderFn?: (ctx: any, inj: any) => Node[]) => void;
+  childNodes?: Node[];
+  componentType?: any;
 }
 
 /**
@@ -233,30 +237,74 @@ export function mountComponent<T = any>(
     }
   }
 
+  let renderDestroyRef = new DefaultDestroyRef();
+  let renderInjector = new Injector(
+    [{ provide: DESTROY_REF, useValue: renderDestroyRef }],
+    childInjector
+  );
+
+  let mountedChildNodes: Node[] = [];
   if (typeof renderFn === 'function') {
-    const childNodes: Node[] = renderFn(instance, childInjector);
+    const childNodes: Node[] = renderFn(instance, renderInjector);
+    mountedChildNodes = childNodes;
     for (const node of childNodes) {
       hostElement.appendChild(node);
     }
   }
 
-  // 5.5 Resolve viewChild queries
-  for (const key of Object.keys(instance)) {
-    const prop = (instance as any)[key];
-    if (prop && prop[IS_VIEW_QUERY]) {
-      const selector = prop.__selector;
-      const refVal = (instance as any)[selector];
-      if (refVal) {
-        prop.__set(refVal);
-      } else {
-        const found =
-          hostElement.querySelector(selector) ||
-          hostElement.querySelector(`[${selector}]`) ||
-          hostElement.querySelector(`#${selector}`);
-        if (found) prop.__set(found);
+  const resolveViewQueries = () => {
+    for (const key of Object.keys(instance)) {
+      const prop = (instance as any)[key];
+      if (prop && prop[IS_VIEW_QUERY]) {
+        const selector = prop.__selector;
+        const refVal = (instance as any)[selector];
+        if (refVal) {
+          prop.__set(refVal);
+        } else {
+          const found =
+            hostElement.querySelector(selector) ||
+            hostElement.querySelector(`[${selector}]`) ||
+            hostElement.querySelector(`#${selector}`);
+          if (found) prop.__set(found);
+        }
       }
     }
-  }
+  };
+
+  const rerender = (newRenderFn?: (ctx: any, inj: any) => Node[]) => {
+    const activeRenderFn =
+      newRenderFn ||
+      componentType.ɵrender ||
+      componentType.__angora_render__ ||
+      componentType.ɵcmp?.render;
+    if (typeof activeRenderFn === 'function') {
+      try {
+        renderDestroyRef.destroy();
+      } catch (e) {
+        console.error('[Angora HMR] Error cleaning up render scope:', e);
+      }
+      renderDestroyRef = new DefaultDestroyRef();
+      renderInjector = new Injector(
+        [{ provide: DESTROY_REF, useValue: renderDestroyRef }],
+        childInjector
+      );
+
+      for (const node of mountedChildNodes) {
+        if (node.parentNode === hostElement) {
+          hostElement.removeChild(node);
+        }
+      }
+      const newChildNodes = activeRenderFn(instance, renderInjector);
+      mountedChildNodes = newChildNodes;
+      for (const node of newChildNodes) {
+        hostElement.appendChild(node);
+      }
+      resolveViewQueries();
+    }
+  };
+
+  // 5.5 Resolve viewChild queries
+  resolveViewQueries();
 
   // 6. Execute OnInit lifecycle hook
   if (typeof instance.angoraOnInit === 'function') {
@@ -272,9 +320,14 @@ export function mountComponent<T = any>(
     if (isDestroyed) return;
     isDestroyed = true;
 
+    hmrRegistry.unregister(componentType, ref);
+
     if (typeof instance.angoraOnDestroy === 'function') {
       instance.angoraOnDestroy();
     }
+    try {
+      renderDestroyRef.destroy();
+    } catch {}
     destroyRef.destroy();
 
     for (const cleanup of cleanups) {
@@ -294,10 +347,17 @@ export function mountComponent<T = any>(
     parentDestroyRef.onDestroy(destroy);
   }
 
-  return {
+  const ref: MountedComponentRef<T> = {
     instance: instance as T,
     hostElement,
     injector: childInjector,
     destroy,
+    rerender,
+    childNodes: mountedChildNodes,
+    componentType,
   };
+
+  hmrRegistry.register(componentType, ref);
+
+  return ref;
 }
