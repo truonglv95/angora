@@ -8,8 +8,15 @@ export const ViewEncapsulation = {
 } as const;
 export type ViewEncapsulation = (typeof ViewEncapsulation)[keyof typeof ViewEncapsulation];
 
+function toKebabCase(str: string): string {
+  return str
+    .replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2')
+    .toLowerCase()
+    .replace(/^-/, '');
+}
+
 export interface ComponentMetadata {
-  selector: string;
+  selector?: string;
   template: string;
   imports?: any[];
   styles?: string[];
@@ -40,25 +47,27 @@ export interface ComponentType<T = any> {
  * Component decorator defining an Angora component
  * @example
  * @Component({
- *   selector: 'app-counter',
  *   template: `
  *     <h1>Count: {{ count() }}</h1>
- *     <button (click)="increment()">+</button>
+ *     <button (click)="count.inc()">+</button>
  *   `
  * })
  * export class CounterComponent {
  *   count = signal(0);
- *   increment() { this.count.update(c => c + 1); }
  * }
  */
 export function Component(metadata: ComponentMetadata) {
   return function <T extends { new (...args: any[]): any }>(target: T) {
+    const selector = metadata.selector || toKebabCase(target.name || 'angora-component');
     const def: ComponentDef<InstanceType<T>> = {
-      selector: metadata.selector,
+      selector,
       imports: metadata.imports,
       styles: metadata.styles,
       type: target,
-      metadata,
+      metadata: {
+        ...metadata,
+        selector,
+      },
     };
     const compTarget = target as unknown as ComponentType<InstanceType<T>>;
     compTarget.ɵcmp = def;

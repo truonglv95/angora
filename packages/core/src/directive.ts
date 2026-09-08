@@ -2,8 +2,15 @@ import type { Provider } from './di.ts';
 import { ɵdir, DIRECTIVE_DEF } from './defs.ts';
 export { ɵdir, DIRECTIVE_DEF };
 
+function toKebabCase(str: string): string {
+  return str
+    .replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2')
+    .toLowerCase()
+    .replace(/^-/, '');
+}
+
 export interface DirectiveMetadata {
-  selector: string;
+  selector?: string;
   host?: Record<string, string>; // e.g. { '[class.active]': 'isActive()', '(click)': 'onClick($event)' }
   providers?: Provider[];
 }
@@ -45,14 +52,18 @@ export class ElementRef<T = HTMLElement> {
  *   onMouseLeave() { this.color.set('yellow'); }
  * }
  */
-export function Directive(metadata: DirectiveMetadata) {
+export function Directive(metadata: DirectiveMetadata = {}) {
   return function <T extends { new (...args: any[]): any }>(target: T) {
+    const selector = metadata.selector || `[${toKebabCase(target.name || 'angora-directive')}]`;
     const def: DirectiveDef<InstanceType<T>> = {
-      selector: metadata.selector,
+      selector,
       host: metadata.host,
       providers: metadata.providers,
       type: target,
-      metadata,
+      metadata: {
+        ...metadata,
+        selector,
+      },
     };
     const dirTarget = target as unknown as DirectiveType<InstanceType<T>>;
     dirTarget.ɵdir = def;

@@ -163,4 +163,47 @@ describe('@angora-js/core - Signals Engine', () => {
     tracked.set(20);
     expect(runs).toEqual([30, 120]);
   });
+
+  test('should support concise setter shorthand: count(newVal)', () => {
+    const count = signal(0);
+    expect(count()).toBe(0);
+
+    const ret = count(42);
+    expect(ret).toBe(42);
+    expect(count()).toBe(42);
+
+    const name = signal<string | undefined>(undefined);
+    expect(name()).toBeUndefined();
+    name('angora');
+    expect(name()).toBe('angora');
+    name(undefined);
+    expect(name()).toBeUndefined();
+  });
+
+  test('should support concise inc and dec helpers', () => {
+    const count = signal(10);
+
+    count.inc();
+    expect(count()).toBe(11);
+
+    count.inc(5);
+    expect(count()).toBe(16);
+
+    count.dec();
+    expect(count()).toBe(15);
+
+    count.dec(10);
+    expect(count()).toBe(5);
+  });
+
+  test('should support concise toggle helper for booleans', () => {
+    const isOpen = signal(false);
+    expect(isOpen()).toBe(false);
+
+    isOpen.toggle();
+    expect(isOpen()).toBe(true);
+
+    isOpen.toggle();
+    expect(isOpen()).toBe(false);
+  });
 });

@@ -1,7 +1,9 @@
 use crate::parser::parse_template;
 use oxc_allocator::Allocator;
+use oxc_ast::ast::*;
 use oxc_parser::Parser;
 use oxc_span::{GetSpan, SourceType};
+use std::collections::HashSet;
 
 pub enum TransformedEntity {
     Component(ComponentMetadata),
@@ -13,7 +15,7 @@ pub enum TransformedEntity {
 pub struct ComponentMetadata {
     pub class_name: String,
     pub selector: String,
-    pub imports_str: String,
+    pub imports_str: Option<String>,
     pub styles_raw: Vec<String>,
     pub template: String,
 }
@@ -50,6 +52,172 @@ fn to_kebab_case(s: &str) -> String {
     result
 }
 
+fn is_angora_internal(name: &str) -> bool {
+    matches!(
+        name,
+        "Component"
+            | "Directive"
+            | "Pipe"
+            | "Injectable"
+            | "signal"
+            | "computed"
+            | "effect"
+            | "batch"
+            | "untrack"
+            | "linkedSignal"
+            | "resource"
+            | "createStore"
+            | "Injector"
+            | "rootInjector"
+            | "ElementRef"
+            | "DestroyRef"
+            | "ChangeDetectorRef"
+            | "DefaultDestroyRef"
+            | "runWithDestroyRef"
+            | "inject"
+            | "OnInit"
+            | "OnDestroy"
+            | "AfterViewInit"
+            | "OnChanges"
+            | "DoCheck"
+            | "Signal"
+            | "WritableSignal"
+            | "ReadonlySignal"
+            | "PipeTransform"
+            | "Provider"
+            | "ViewEncapsulation"
+            | "ComponentDef"
+            | "DirectiveDef"
+            | "PipeDef"
+            | "TemplateNode"
+    )
+}
+
+fn extract_pipes_from_expr(expr: &str, pipes: &mut HashSet<String>) {
+    if !expr.contains('|') {
+        return;
+    }
+    let parts: Vec<&str> = expr.split('|').collect();
+    if parts.len() > 1 {
+        for pipe_part in &parts[1..] {
+            let trimmed = pipe_part.trim();
+            let pipe_ident = trimmed
+                .split(|c: char| c == ':' || c.is_whitespace() || c == '(' || c == ')')
+                .next()
+                .unwrap_or("")
+                .trim();
+            if !pipe_ident.is_empty() {
+                pipes.insert(pipe_ident.to_lowercase());
+            }
+        }
+    }
+}
+
+fn collect_template_usages(
+    nodes: &[crate::ast::TemplateNode],
+    tags: &mut HashSet<String>,
+    attrs: &mut HashSet<String>,
+    pipes: &mut HashSet<String>,
+) {
+    for node in nodes {
+        match node {
+            crate::ast::TemplateNode::Element(el) => {
+                tags.insert(el.name.to_lowercase());
+                for attr in &el.attributes {
+                    attrs.insert(attr.name.to_lowercase());
+                }
+                for prop in &el.properties {
+                    attrs.insert(prop.name.to_lowercase());
+                    extract_pipes_from_expr(&prop.expression, pipes);
+                }
+                for evt in &el.events {
+                    extract_pipes_from_expr(&evt.handler, pipes);
+                }
+                for two in &el.two_ways {
+                    attrs.insert(two.name.to_lowercase());
+                }
+                collect_template_usages(&el.children, tags, attrs, pipes);
+            }
+            crate::ast::TemplateNode::Interpolation(interp) => {
+                extract_pipes_from_expr(&interp.expression, pipes);
+            }
+            crate::ast::TemplateNode::IfBlock(b) => {
+                for branch in &b.branches {
+                    if let Some(cond) = &branch.condition {
+                        extract_pipes_from_expr(cond, pipes);
+                    }
+                    collect_template_usages(&branch.children, tags, attrs, pipes);
+                }
+            }
+            crate::ast::TemplateNode::ForBlock(b) => {
+                extract_pipes_from_expr(&b.iterable, pipes);
+                collect_template_usages(&b.children, tags, attrs, pipes);
+                if let Some(empty) = &b.empty_block {
+                    collect_template_usages(empty, tags, attrs, pipes);
+                }
+            }
+            crate::ast::TemplateNode::SwitchBlock(b) => {
+                extract_pipes_from_expr(&b.expression, pipes);
+                for case in &b.cases {
+                    if let Some(cv) = &case.case_value {
+                        extract_pipes_from_expr(cv, pipes);
+                    }
+                    collect_template_usages(&case.children, tags, attrs, pipes);
+                }
+            }
+            crate::ast::TemplateNode::DeferBlock(b) => {
+                collect_template_usages(&b.main_block, tags, attrs, pipes);
+                if let Some(l) = &b.loading_block {
+                    collect_template_usages(&l.children, tags, attrs, pipes);
+                }
+                if let Some(p) = &b.placeholder_block {
+                    collect_template_usages(&p.children, tags, attrs, pipes);
+                }
+                if let Some(e) = &b.error_block {
+                    collect_template_usages(&e.children, tags, attrs, pipes);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn matches_candidate(
+    name: &str,
+    tags: &HashSet<String>,
+    attrs: &HashSet<String>,
+    pipes: &HashSet<String>,
+) -> bool {
+    if is_angora_internal(name) {
+        return false;
+    }
+
+    // 1. Explicit convention naming
+    if name.ends_with("Component") || name.ends_with("Directive") || name.ends_with("Pipe") {
+        return true;
+    }
+
+    let lower = name.to_lowercase();
+    let kebab = to_kebab_case(name);
+
+    // 2. Tag matching (e.g. `<Button>`, `<app-button>`, `<user-avatar>`)
+    if tags.contains(&lower) || tags.contains(&kebab) {
+        return true;
+    }
+
+    // 3. Pipe matching (e.g. `{{ text | reverse }}`)
+    if pipes.contains(&lower) {
+        return true;
+    }
+
+    // 4. Directive attribute matching (e.g. `<div highlight>`)
+    if attrs.contains(&lower) || attrs.contains(&kebab) {
+        return true;
+    }
+
+    false
+}
+
 fn extract_entity_metadata<'a>(
     class: &mut oxc_ast::ast::Class<'a>,
     source: &str,
@@ -79,7 +247,7 @@ fn extract_entity_metadata<'a>(
                             {
                                 let mut selector: Option<String> = None;
                                 let mut template: Option<String> = None;
-                                let mut imports_str = "[]".to_string();
+                                let mut imports_str: Option<String> = None;
                                 let mut styles_raw = Vec::new();
 
                                 for prop in &obj.properties {
@@ -130,9 +298,9 @@ fn extract_entity_metadata<'a>(
                                             },
                                             Some("imports") => {
                                                 let span = p.value.span();
-                                                imports_str = source
+                                                imports_str = Some(source
                                                     [span.start as usize..span.end as usize]
-                                                    .to_string();
+                                                    .to_string());
                                             }
                                             Some("styles") => {
                                                 if let oxc_ast::ast::Expression::ArrayExpression(
@@ -377,6 +545,67 @@ pub fn transform_component(source: &str) -> Result<String, String> {
     let mut entities = Vec::new();
     let mut needs_runtime = false;
 
+    // Collect all candidate imported value symbols
+    let mut imported_symbols = Vec::new();
+    for stmt in &parser_ret.program.body {
+        if let Statement::ImportDeclaration(import_decl) = stmt {
+            if import_decl.import_kind.is_type() {
+                continue;
+            }
+            if let Some(specifiers) = &import_decl.specifiers {
+                for spec in specifiers {
+                    match spec {
+                        ImportDeclarationSpecifier::ImportSpecifier(s) => {
+                            if !s.import_kind.is_type() {
+                                imported_symbols.push(s.local.name.to_string());
+                            }
+                        }
+                        ImportDeclarationSpecifier::ImportDefaultSpecifier(s) => {
+                            imported_symbols.push(s.local.name.to_string());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    // Also collect local classes decorated with @Component, @Directive, or @Pipe
+    let mut local_entity_names = Vec::new();
+    for stmt in &parser_ret.program.body {
+        let cls_opt = match stmt {
+            Statement::ExportDeclaration(decl) => {
+                if let Declaration::ClassDeclaration(c) = &decl.declaration {
+                    Some(c.as_ref())
+                } else {
+                    None
+                }
+            }
+            Statement::ClassDeclaration(c) => Some(c.as_ref()),
+            Statement::ExportDefaultDeclaration(decl) => {
+                if let ExportDefaultDeclarationKind::ClassDeclaration(c) = &decl.declaration {
+                    Some(c.as_ref())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        if let Some(cls) = cls_opt {
+            for dec in &cls.decorators {
+                if let Expression::CallExpression(call) = &dec.expression {
+                    if let Expression::Identifier(id) = &call.callee {
+                        if matches!(id.name.as_str(), "Component" | "Directive" | "Pipe") {
+                            if let Some(cls_id) = &cls.id {
+                                local_entity_names.push(cls_id.name.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Traverse AST statements to discover classes with decorators and strip them
     for stmt in parser_ret.program.body.iter_mut() {
         let class_opt = match stmt {
@@ -426,6 +655,35 @@ pub fn transform_component(source: &str) -> Result<String, String> {
                             scope_id.as_deref(),
                         );
 
+                        let final_imports = match &comp.imports_str {
+                            Some(s) if s.trim() != "[]" => s.clone(),
+                            _ => {
+                                let mut tags = HashSet::new();
+                                let mut attrs = HashSet::new();
+                                let mut pipes = HashSet::new();
+                                collect_template_usages(&template_ast, &mut tags, &mut attrs, &mut pipes);
+
+                                let mut auto_imports = Vec::new();
+                                let mut seen = HashSet::new();
+
+                                for sym in imported_symbols.iter().chain(local_entity_names.iter()) {
+                                    if sym == &comp.class_name || seen.contains(sym) {
+                                        continue;
+                                    }
+                                    if matches_candidate(sym, &tags, &attrs, &pipes) {
+                                        seen.insert(sym.clone());
+                                        auto_imports.push(sym.clone());
+                                    }
+                                }
+
+                                if auto_imports.is_empty() {
+                                    "[]".to_string()
+                                } else {
+                                    format!("[{}]", auto_imports.join(", "))
+                                }
+                            }
+                        };
+
                         let sid_val = scope_id
                             .as_ref()
                             .map(|s| format!("'{}'", s))
@@ -463,7 +721,7 @@ pub fn transform_component(source: &str) -> Result<String, String> {
 }}"#,
                             cn = comp.class_name,
                             sel = comp.selector,
-                            imp = comp.imports_str,
+                            imp = final_imports,
                             styles = styles_str,
                             sid_val = sid_val,
                             render = render_fn_body,

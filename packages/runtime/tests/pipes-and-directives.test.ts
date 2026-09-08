@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'bun:test';
 import { Window } from 'happy-dom';
 import {
   Pipe,
+  pipe,
   Directive,
   signal,
   ElementRef,
@@ -119,5 +120,42 @@ describe('@angora-js/runtime - Directive Architecture (@Directive)', () => {
 
     expect(directiveInstance.clicked()).toBe(true);
     expect(btn.style.backgroundColor).toBe('orange');
+  });
+
+  it('should support functional pipes created with pipe()', () => {
+    const reverse = pipe('reverse', (s: string) => s.split('').reverse().join(''));
+    // Direct call
+    expect(reverse('angora')).toBe('arogna');
+
+    // In component context imports
+    const ctx: any = {
+      [COMPONENT_DEF]: {
+        metadata: {
+          imports: [reverse],
+        },
+      },
+    };
+    const result = applyPipe('reverse', 'hello', [], ctx);
+    expect(result).toBe('olleh');
+  });
+
+  it('should auto-derive component selector from class name if omitted', () => {
+    const { Component, getComponentDef } = require('@angora-js/core');
+    @Component({
+      template: '<h1>Hello</h1>',
+    })
+    class UserProfileCardComponent {}
+
+    const def = getComponentDef(UserProfileCardComponent);
+    expect(def?.selector).toBe('user-profile-card-component');
+  });
+
+  it('should auto-derive directive selector from class name if omitted', () => {
+    const { Directive, getDirectiveDef } = require('@angora-js/core');
+    @Directive()
+    class CustomTooltipDirective {}
+
+    const def = getDirectiveDef(CustomTooltipDirective);
+    expect(def?.selector).toBe('[custom-tooltip-directive]');
   });
 });

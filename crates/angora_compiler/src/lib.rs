@@ -289,4 +289,43 @@ mod tests {
         assert!(!result.contains("@Injectable"));
         assert!(!result.contains("as any"));
     }
+
+    #[test]
+    fn test_rust_auto_imports_and_auto_selector() {
+        let source = r#"
+            import { Component, signal } from '@angora-js/core';
+            import { UpperCasePipe, DatePipe } from '@angora-js/core';
+            import { UserAvatarComponent } from './avatar';
+            import { HighlightDirective } from './highlight';
+            import type { UserProfile } from './models';
+
+            @Component({
+                template: `
+                    <user-avatar-component></user-avatar-component>
+                    <div highlight-directive>{{ name() | uppercase }} - {{ today() | date }}</div>
+                `
+            })
+            export class DashboardPage {
+                name = signal('angora');
+                today = signal(new Date());
+            }
+        "#;
+
+        let result = transform_component(source).expect("Transform failed");
+        // Selector should be auto-derived to kebab-case
+        assert!(result.contains("selector: 'dashboard-page'"));
+        // Imports should be auto-populated with UpperCasePipe, DatePipe, UserAvatarComponent, HighlightDirective
+        assert!(result.contains("UpperCasePipe"));
+        assert!(result.contains("DatePipe"));
+        assert!(result.contains("UserAvatarComponent"));
+        assert!(result.contains("HighlightDirective"));
+
+        // Extract the imports: [...] snippet
+        let imports_line = result.lines().find(|l| l.contains("imports: [")).unwrap_or("");
+        assert!(!imports_line.contains("UserProfile"));
+        assert!(!imports_line.contains("Component"));
+        assert!(!imports_line.contains("signal"));
+        assert!(!result.contains("@Component"));
+    }
 }
+

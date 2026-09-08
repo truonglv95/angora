@@ -78,6 +78,86 @@ export function memoizePipe<T extends (...args: any[]) => any>(fn: T): T {
   }) as T;
 }
 
+export interface FunctionalPipe<TIn = any, TOut = any> {
+  (value: TIn, ...args: any[]): TOut;
+  transform(value: TIn, ...args: any[]): TOut;
+  name: string;
+  pure: boolean;
+  ɵpipe: PipeDef<any>;
+}
+
+/**
+ * Creates a lightweight functional pipe for template or TS transformations
+ * @example
+ * export const reverse = pipe('reverse', (s: string) => s.split('').reverse().join(''));
+ * export const truncate = pipe((val: string, max = 10) => val.slice(0, max), 'truncate');
+ */
+export function pipe<TIn = any, TOut = any>(
+  name: string,
+  transformFn: (value: TIn, ...args: any[]) => TOut,
+  options?: { pure?: boolean }
+): FunctionalPipe<TIn, TOut>;
+export function pipe<TIn = any, TOut = any>(
+  transformFn: (value: TIn, ...args: any[]) => TOut,
+  options?: { name?: string; pure?: boolean } | string
+): FunctionalPipe<TIn, TOut>;
+export function pipe<TIn = any, TOut = any>(
+  nameOrFn: string | ((value: TIn, ...args: any[]) => TOut),
+  optionsOrFn?: ((value: TIn, ...args: any[]) => TOut) | { name?: string; pure?: boolean } | string,
+  extraOptions?: { pure?: boolean }
+): FunctionalPipe<TIn, TOut> {
+  let name: string;
+  let transformFn: (value: TIn, ...args: any[]) => TOut;
+  let pure = true;
+
+  if (typeof nameOrFn === 'string') {
+    name = nameOrFn;
+    transformFn = optionsOrFn as (value: TIn, ...args: any[]) => TOut;
+    if (extraOptions && typeof extraOptions.pure === 'boolean') {
+      pure = extraOptions.pure;
+    }
+  } else {
+    transformFn = nameOrFn;
+    if (typeof optionsOrFn === 'string') {
+      name = optionsOrFn;
+    } else if (typeof optionsOrFn === 'object' && optionsOrFn !== null) {
+      name = optionsOrFn.name || nameOrFn.name || 'pipe';
+      pure = optionsOrFn.pure ?? true;
+    } else {
+      name = nameOrFn.name || 'pipe';
+    }
+  }
+
+  const finalFn = pure ? memoizePipe(transformFn) : transformFn;
+
+  const functionalPipe = ((value: TIn, ...args: any[]) => {
+    return finalFn(value, ...args);
+  }) as unknown as FunctionalPipe<TIn, TOut>;
+
+  functionalPipe.transform = (value: TIn, ...args: any[]) => {
+    return finalFn(value, ...args);
+  };
+
+  const def: PipeDef<any> = {
+    name,
+    pure,
+    type: functionalPipe as any,
+    metadata: {
+      name,
+      pure,
+    },
+  };
+
+  try {
+    Object.defineProperty(functionalPipe, 'name', { value: name, configurable: true });
+  } catch {}
+  functionalPipe.pure = pure;
+  functionalPipe.ɵpipe = def;
+  (functionalPipe as any)[PIPE_DEF] = def;
+
+  return functionalPipe;
+}
+
 // Built-in Standard Pipes
 
 @Pipe({ name: 'uppercase', pure: true })

@@ -12,10 +12,10 @@ const pipeInstancesCache = new WeakMap<any, Map<string, PipeTransform>>();
 const dynamicPipeRegistry = new Map<string, new () => PipeTransform>();
 
 /**
- * Registers a pipe class dynamically or globally
+ * Registers a pipe class or functional pipe dynamically or globally
  */
-export function registerPipe(name: string, pipe: new () => PipeTransform) {
-  dynamicPipeRegistry.set(name.toLowerCase(), pipe);
+export function registerPipe(name: string, pipe: PipeTransform | (new () => PipeTransform)) {
+  dynamicPipeRegistry.set(name.toLowerCase(), pipe as any);
 }
 
 /**
@@ -40,7 +40,12 @@ export function resolvePipe(name: string, ctx?: any, injector?: Injector): PipeT
       for (const item of imports) {
         const pipeDef = getPipeDef(item);
         if (pipeDef && pipeDef.metadata.name.toLowerCase() === normalizedName) {
-          const pipeInstance = injector ? injector.get(item, new item()) : new item();
+          const pipeInstance =
+            typeof item?.transform === 'function'
+              ? item
+              : injector
+                ? injector.get(item, new item())
+                : new item();
           instanceMap.set(normalizedName, pipeInstance);
           return pipeInstance;
         }
@@ -51,7 +56,10 @@ export function resolvePipe(name: string, ctx?: any, injector?: Injector): PipeT
   // Check dynamic registry
   const Registered = dynamicPipeRegistry.get(normalizedName);
   if (Registered) {
-    return new Registered();
+    if (typeof (Registered as any).transform === 'function') {
+      return Registered as any;
+    }
+    return new (Registered as any)();
   }
 
   const capitalized = name.charAt(0).toUpperCase() + name.slice(1);

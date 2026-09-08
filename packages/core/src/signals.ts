@@ -11,8 +11,13 @@ export interface Signal<T> {
 }
 
 export interface WritableSignal<T> extends Signal<T> {
+  (): T;
+  (value: T): T;
   set(value: T): void;
   update(updater: (prev: T) => T): void;
+  inc: T extends number ? (delta?: number) => void : never;
+  dec: T extends number ? (delta?: number) => void : never;
+  toggle: T extends boolean ? () => void : never;
   asReadonly(): Signal<T>;
 }
 
@@ -241,10 +246,26 @@ export function signal<T>(
 ): WritableSignal<T> {
   const node = new SignalNode(initialValue, options?.equal);
 
-  const getter = (() => node.get()) as WritableSignal<T>;
+  const getter = ((...args: [T?]) => {
+    if (args.length > 0) {
+      node.set(args[0] as T);
+      return args[0] as T;
+    }
+    return node.get();
+  }) as unknown as WritableSignal<T>;
+
   (getter as any)[IS_SIGNAL] = true;
   getter.set = (val: T) => node.set(val);
   getter.update = (updater: (prev: T) => T) => node.update(updater);
+  (getter as any).inc = (delta = 1) => {
+    (node as any).update((prev: any) => prev + delta);
+  };
+  (getter as any).dec = (delta = 1) => {
+    (node as any).update((prev: any) => prev - delta);
+  };
+  (getter as any).toggle = () => {
+    (node as any).update((prev: any) => !prev);
+  };
   getter.asReadonly = () => {
     const ro = (() => node.get()) as Signal<T>;
     (ro as any)[IS_SIGNAL] = true;
