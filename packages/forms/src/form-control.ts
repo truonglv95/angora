@@ -136,6 +136,14 @@ export class FormControl<T = any> implements AbstractControl<T> {
     this.dirty.set(true);
   }
 
+  public set(newValue: T): void {
+    this.setValue(newValue);
+  }
+
+  public update(fn: (prev: T) => T): void {
+    this.setValue(fn(this.value()));
+  }
+
   public patchValue(newValue: Partial<T>): void {
     if (typeof newValue === 'object' && newValue !== null && typeof this.value() === 'object') {
       this.setValue({ ...this.value(), ...newValue } as T);

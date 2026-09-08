@@ -67,3 +67,11 @@ export class Validators {
     };
   }
 }
+
+export const required: ValidatorFn = Validators.required;
+export const minLength: (length: number) => ValidatorFn = Validators.minLength;
+export const maxLength: (length: number) => ValidatorFn = Validators.maxLength;
+export const email: ValidatorFn = Validators.email;
+export const pattern: (pattern: string | RegExp) => ValidatorFn = Validators.pattern;
+export const min: (minVal: number) => ValidatorFn = Validators.min;
+export const max: (maxVal: number) => ValidatorFn = Validators.max;

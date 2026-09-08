@@ -9,25 +9,30 @@ export function getDefaultQueryClient(): QueryClient {
 }
 
 /**
+ * Hook to inject the active QueryClient or get the global default.
+ */
+export function useQueryClient(customClient?: QueryClient): QueryClient {
+  if (customClient) return customClient;
+  try {
+    return inject(QUERY_CLIENT, defaultClient) || defaultClient;
+  } catch {
+    return defaultClient;
+  }
+}
+
+/**
  * Creates a reactive asynchronous query backed by Angora fine-grained signals.
  * Features:
- * - Automatic signal dependency tracking: when parameters in optionsFn() change, query refetches automatically.
+ * - Automatic signal dependency tracking: when parameters change, query refetches automatically.
  * - Stale-While-Revalidate (SWR): instantly returns cached data while updating in the background.
  * - Zero loading flash if initial or cached data is present.
  */
 export function createQuery<T = unknown>(
-  optionsFn: () => QueryOptions<T>,
+  optionsOrFn: QueryOptions<T> | (() => QueryOptions<T>),
   customClient?: QueryClient
 ): QueryResult<T> {
-  const client =
-    customClient ||
-    (() => {
-      try {
-        return inject(QUERY_CLIENT, defaultClient) || defaultClient;
-      } catch {
-        return defaultClient;
-      }
-    })();
+  const optionsFn = typeof optionsOrFn === 'function' ? optionsOrFn : () => optionsOrFn;
+  const client = customClient || useQueryClient();
 
   const data = signal<T | undefined>(undefined);
   const isLoading = signal<boolean>(true);
@@ -149,3 +154,45 @@ export function createQuery<T = unknown>(
     refetch,
   };
 }
+
+/**
+ * Ultra-lean query hook for Angora applications.
+ * Supports:
+ * - Shorthand: `useQuery(['todos'], fetchTodos)`
+ * - Options object: `useQuery({ queryKey: ['todos'], queryFn: fetchTodos })`
+ * - Reactive options: `useQuery(() => ({ queryKey: ['user', id()], queryFn: () => fetchUser(id()) }))`
+ */
+export function useQuery<T = unknown>(
+  queryKey: import('./types.ts').QueryKey,
+  queryFn: import('./types.ts').QueryFunction<T>,
+  options?: Omit<QueryOptions<T>, 'queryKey' | 'queryFn'>,
+  customClient?: QueryClient
+): QueryResult<T>;
+export function useQuery<T = unknown>(
+  options: QueryOptions<T>,
+  customClient?: QueryClient
+): QueryResult<T>;
+export function useQuery<T = unknown>(
+  optionsFn: () => QueryOptions<T>,
+  customClient?: QueryClient
+): QueryResult<T>;
+export function useQuery<T = unknown>(
+  arg1: import('./types.ts').QueryKey | QueryOptions<T> | (() => QueryOptions<T>),
+  arg2?: import('./types.ts').QueryFunction<T> | QueryClient,
+  arg3?: Omit<QueryOptions<T>, 'queryKey' | 'queryFn'>,
+  arg4?: QueryClient
+): QueryResult<T> {
+  if (Array.isArray(arg1)) {
+    const queryKey = arg1 as import('./types.ts').QueryKey;
+    const queryFn = arg2 as import('./types.ts').QueryFunction<T>;
+    const extraOpts = arg3 || {};
+    const client = arg4;
+    return createQuery<T>(() => ({ queryKey, queryFn, ...extraOpts }), client);
+  }
+  if (typeof arg1 === 'function') {
+    return createQuery<T>(arg1 as () => QueryOptions<T>, arg2 as QueryClient | undefined);
+  }
+  return createQuery<T>(arg1 as QueryOptions<T>, arg2 as QueryClient | undefined);
+}
+
+export const query = useQuery;

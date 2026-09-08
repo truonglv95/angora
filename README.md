@@ -5,7 +5,7 @@
 ![Angora Architecture](https://img.shields.io/badge/Architecture-Zero--VDOM%20%7C%20Signals-6366f1?style=for-the-badge)
 ![Compiler](<https://img.shields.io/badge/Compiler-Native%20Rust%20OXC%20(%3C0.1ms)-f97316?style=for-the-badge>)
 ![Typecheck](https://img.shields.io/badge/Typecheck-TypeScript%207%20Native%20Go-10b981?style=for-the-badge)
-![Tests](<https://img.shields.io/badge/Tests-323%2F323%20PASS%20(100%25)-22c55e?style=for-the-badge>)
+![Tests](<https://img.shields.io/badge/Tests-329%2F329%20PASS%20(100%25)-22c55e?style=for-the-badge>)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
 **The Next-Generation Zero-Virtual-DOM Frontend Platform.**  
@@ -56,21 +56,24 @@ Choose from 4 official templates:
 
 ## 💻 Code at a Glance
 
-```typescript
-import { Component, signal, computed } from '@angora-js/core';
-import { CurrencyPipe } from '@angora-js/core';
+Writing Angora components is lean, fast, and free of ceremonial boilerplate:
 
+```typescript
+import { Component, signal, computed, CurrencyPipe } from '@angora-js/core';
+
+// No manual selector needed (defaults to <counter-component>)
+// No manual imports array needed (Rust compiler auto-resolves CurrencyPipe)
 @Component({
-  selector: 'app-counter',
-  imports: [CurrencyPipe],
   template: `
     <div class="card">
       <h2>🐾 Counter: {{ count() }}</h2>
       <p>Double: {{ double() }} | Price: {{ count() * 9.99 | currency: 'USD' }}</p>
 
       <div class="actions">
-        <button (click)="increment()">+ Increment</button>
-        <button (click)="reset()">Reset</button>
+        <!-- Direct signal ergonomics -->
+        <button (click)="count.inc()">+ Increment</button>
+        <button (click)="count.dec()">- Decrement</button>
+        <button (click)="count(0)">Reset</button>
       </div>
 
       @if (count() >= 10) {
@@ -84,15 +87,211 @@ import { CurrencyPipe } from '@angora-js/core';
 export class CounterComponent {
   count = signal(0);
   double = computed(() => this.count() * 2);
+}
+```
 
-  increment() {
-    this.count.update(c => c + 1);
-  }
+---
 
-  reset() {
-    this.count.set(0);
+## 🪄 Modern Developer Experience (DX)
+
+Angora eliminates legacy framework ceremonies, offering the most concise, expressive, and productive developer experience in the modern frontend ecosystem:
+
+### 1. Auto-Selectors & Auto-Imports
+
+Gone are the days of repetitive `selector` strings and bloated `imports: [...]` arrays:
+
+- **Auto-Selector**: Omit `selector`, and Angora automatically derives `<counter-component>` or `<app-counter>` from your class name.
+- **Auto-Imports**: The native Rust OXC compiler inspects your file's TypeScript imports and automatically registers child components, directives, and pipes in your template.
+
+```typescript
+import { Component, signal } from '@angora-js/core';
+import { UserAvatar } from './user-avatar.ts';
+import { TimeAgoPipe } from './time-ago.pipe.ts';
+
+// No selector: '' or imports: [UserAvatar, TimeAgoPipe] needed!
+@Component({
+  template: `
+    <user-avatar [user]="user()" />
+    <span>{{ user().createdAt | timeAgo }}</span>
+  `,
+})
+export class ProfileHeader {
+  user = signal({ name: 'Alice', createdAt: Date.now() });
+}
+```
+
+---
+
+### 2. Signal Ergonomics (`.inc()`, `.dec()`, `.toggle()`, `sig(val)`)
+
+Signals in Angora are concise, callable, and feature first-class arithmetic shortcuts:
+
+```typescript
+const count = signal(0);
+const isOpen = signal(false);
+
+count.inc(); // count.set(1)
+count.dec(); // count.set(0)
+count.inc(5); // count.set(5)
+isOpen.toggle(); // isOpen.set(true)
+count(42); // Setter call shortcut for count.set(42)
+```
+
+---
+
+### 3. `model()` Two-Way Binding Primitives
+
+Create synchronized two-way bindings in a single line without the `@Input()` + `@Output() change = new EventEmitter()` boilerplate:
+
+```typescript
+import { Component, model } from '@angora-js/core';
+
+@Component({
+  template: `
+    <button (click)="value.dec()">-</button>
+    <span>{{ value() }}</span>
+    <button (click)="value.inc()">+</button>
+  `,
+})
+export class StepperComponent {
+  // Automatically exposes [value] input and (valueChange) output!
+  value = model(0);
+}
+
+// In parent template:
+// <stepper-component [(value)]="quantity" />
+```
+
+---
+
+### 4. Functional Components & Functional Pipes
+
+Need a lean UI atom or transform? You don't need heavy class definitions:
+
+```typescript
+import { component, pipe } from '@angora-js/core';
+
+// Functional Component
+export const Badge = component({
+  template: `<span class="badge">{{ text() }}</span>`,
+  setup: props => ({ text: () => props.text || 'Default' }),
+});
+
+// Functional Pipe
+export const uppercase = pipe('uppercase', (val: string) => val.toUpperCase());
+```
+
+---
+
+### 5. `reactive()` & `toRefs()`
+
+Enjoy Vue/Solid-like transparent object reactivity with safe signal destructuring:
+
+```typescript
+import { reactive, toRefs } from '@angora-js/core';
+
+const state = reactive({
+  username: 'alice',
+  theme: 'dark',
+});
+
+// Destructure without losing signal reactivity:
+const { username, theme } = toRefs(state);
+username.set('bob');
+console.log(state.username); // 'bob'
+```
+
+---
+
+### 6. Composable Router Hooks
+
+Navigate and inspect route state anywhere without constructor DI ceremony:
+
+```typescript
+import { useRouter, useParams, useQueryParams, useRoute } from '@angora-js/router';
+
+export class ProductDetailComponent {
+  private router = useRouter();
+  params = useParams(); // Signal of { id: '123' }
+  query = useQueryParams(); // Signal of { tab: 'reviews' }
+
+  checkout() {
+    this.router.navigate(['/checkout', this.params().id]);
   }
 }
+```
+
+---
+
+### 7. Signal Forms (`@angora-js/forms`)
+
+Define reactive, type-safe forms in a fraction of the code of traditional reactive forms:
+
+```typescript
+import { form, required, email, minLength, bindForm } from '@angora-js/forms';
+
+const loginForm = form({
+  email: ['', [required, email]],
+  password: ['', [required, minLength(8)]],
+  rememberMe: false, // auto-wrapped in FormControl
+});
+
+// Direct property access & signal ergonomics:
+loginForm.email.set('alice@angora.dev');
+loginForm.email.update(val => val.trim());
+
+console.log(loginForm.valid()); // boolean Signal
+console.log(loginForm.email.errors()); // Signal: { required: true } | null
+console.log(loginForm.value()); // Signal: { email: '...', password: '...', rememberMe: false }
+
+// Reset all values back to defaults:
+loginForm.reset();
+```
+
+Zero-ceremony DOM binding with `bindForm`:
+
+```typescript
+// Automatically wires inputs by name, updates ng-valid/ng-dirty CSS classes,
+// marks all touched on submit, and invokes callback when valid:
+const unbind = bindForm(formElement, loginForm, values => {
+  console.log('Submitted:', values);
+});
+```
+
+---
+
+### 8. Signals Data Query & SWR (`@angora-js/query`)
+
+Built-in enterprise caching, automatic signal dependency tracking, and optimistic mutations:
+
+```typescript
+import { useQuery, useMutation, useQueryClient } from '@angora-js/query';
+
+// Shorthand Query with Stale-While-Revalidate (SWR):
+const {
+  data: todos,
+  isLoading,
+  error,
+  refetch,
+} = useQuery(
+  ['todos'],
+  fetchTodos,
+  { staleTime: 60_000 } // 1 min fresh cache
+);
+
+// Reactive Query: automatically refetches whenever userId() signal changes!
+const user = useQuery(() => ({
+  queryKey: ['user', userId()],
+  queryFn: () => fetchUser(userId()),
+}));
+
+// Optimistic Mutation:
+const queryClient = useQueryClient();
+const addTodo = useMutation((title: string) => api.createTodo(title), {
+  onSuccess: () => {
+    queryClient.invalidateQueries(['todos']);
+  },
+});
 ```
 
 ---
@@ -144,8 +343,8 @@ export class CounterComponent {
 
 Angora runs an automated test matrix with 100% green status across all suites:
 
-- **34/34** Native Rust Compiler tests (`cargo test`)
-- **277/277** TypeScript tests across 40 files (`bun test`)
+- **35/35** Native Rust Compiler tests (`cargo test`)
+- **294/294** TypeScript tests across 40 files (`bun test`)
 - **12/12** Official Stefan Krause js-framework-benchmark tests:
   - Create 1,000 rows DOM: **~52ms**
   - Replace 1,000 rows DOM: **~70ms**

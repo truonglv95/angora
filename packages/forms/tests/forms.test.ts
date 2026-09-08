@@ -1,6 +1,19 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { Window } from 'happy-dom';
-import { FormControl, FormGroup, FormArray, Validators, bindControl } from '../src/index.ts';
+import {
+  FormControl,
+  FormGroup,
+  FormArray,
+  Validators,
+  bindControl,
+  form,
+  control,
+  formArray,
+  bindForm,
+  required,
+  email,
+  minLength,
+} from '../src/index.ts';
 
 describe('@angora-js/forms - Reactive Forms Engine', () => {
   let doc: Document;
@@ -217,5 +230,116 @@ describe('@angora-js/forms - Reactive Forms Engine', () => {
     expect(usernameControl.status()).toBe('INVALID');
     expect(usernameControl.valid()).toBe(false);
     expect(usernameControl.hasError('usernameTaken')).toBe(true);
+  });
+
+  test('form() builder creates ultra-lean forms with direct property access', () => {
+    const loginForm = form({
+      email: ['', [required, email]],
+      password: ['', required],
+      rememberMe: false,
+    });
+
+    // Check initial state
+    expect(loginForm.valid()).toBe(false);
+    expect(loginForm.invalid()).toBe(true);
+    expect(loginForm.email.valid()).toBe(false);
+    expect(loginForm.email.hasError('required')).toBe(true);
+
+    // Direct property setting via .set()
+    loginForm.email.set('user@angora.dev');
+    loginForm.password.set('secret123');
+    loginForm.rememberMe.set(true);
+
+    expect(loginForm.email.valid()).toBe(true);
+    expect(loginForm.valid()).toBe(true);
+    expect(loginForm.value()).toEqual({
+      email: 'user@angora.dev',
+      password: 'secret123',
+      rememberMe: true,
+    });
+
+    // .update() method
+    loginForm.email.update(val => val.toUpperCase());
+    expect(loginForm.email.value()).toBe('USER@ANGORA.DEV');
+
+    // Reset form
+    loginForm.reset();
+    expect(loginForm.email.value()).toBe('');
+    expect(loginForm.rememberMe.value()).toBe(false);
+    expect(loginForm.valid()).toBe(false);
+  });
+
+  test('form() builder supports nested groups and formArray()', () => {
+    const userProfile = form({
+      name: ['', required],
+      address: {
+        city: ['', required],
+        zip: '10000',
+      },
+      skills: formArray(['TypeScript', 'Rust']),
+    });
+
+    expect(userProfile.valid()).toBe(false);
+    expect(userProfile.address.city.valid()).toBe(false);
+
+    userProfile.name.set('Alice');
+    userProfile.address.city.set('Tokyo');
+
+    expect(userProfile.valid()).toBe(true);
+    expect(userProfile.value()).toEqual({
+      name: 'Alice',
+      address: {
+        city: 'Tokyo',
+        zip: '10000',
+      },
+      skills: ['TypeScript', 'Rust'],
+    });
+  });
+
+  test('bindForm() wires HTMLFormElement inputs and intercepts submit', () => {
+    const formEl = doc.createElement('form') as HTMLFormElement;
+    formEl.innerHTML = `
+      <input name="email" type="email" />
+      <input name="password" type="password" />
+      <button type="submit">Submit</button>
+    `;
+    doc.body.appendChild(formEl);
+
+    const loginForm = form({
+      email: ['', [required, email]],
+      password: ['', required],
+    });
+
+    let submittedData: any = null;
+    const unbind = bindForm(formEl, loginForm, data => {
+      submittedData = data;
+    });
+
+    // Submitting invalid form marks all as touched and does NOT call callback
+    formEl.dispatchEvent(new (window as any).Event('submit', { cancelable: true }));
+    expect(loginForm.touched()).toBe(true);
+    expect(loginForm.email.touched()).toBe(true);
+    expect(submittedData).toBeNull();
+
+    // Type into inputs
+    const emailInput = formEl.querySelector<HTMLInputElement>('input[name="email"]')!;
+    const passwordInput = formEl.querySelector<HTMLInputElement>('input[name="password"]')!;
+
+    emailInput.value = 'hello@world.com';
+    emailInput.dispatchEvent(new (window as any).Event('input'));
+
+    passwordInput.value = 'password99';
+    passwordInput.dispatchEvent(new (window as any).Event('input'));
+
+    expect(loginForm.valid()).toBe(true);
+
+    // Submit valid form
+    formEl.dispatchEvent(new (window as any).Event('submit', { cancelable: true }));
+    expect(submittedData).toEqual({
+      email: 'hello@world.com',
+      password: 'password99',
+    });
+
+    unbind();
   });
 });

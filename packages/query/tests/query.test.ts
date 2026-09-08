@@ -4,6 +4,9 @@ import {
   QueryClient,
   createQuery,
   createMutation,
+  useQuery,
+  useMutation,
+  useQueryClient,
   dehydrate,
   hydrate,
   renderDehydratedScript,
@@ -181,5 +184,60 @@ describe('@angora-js/query - Enterprise Asynchronous State & Caching Engine', ()
     expect(query.isLoading()).toBe(false);
     expect(query.data()).toEqual({ user: 'admin', role: 'root' } as any);
     expect(clientNetworkCalls).toBe(0); // ZERO duplicate network calls!
+  });
+
+  test('useQuery supports shorthand signature and options object', async () => {
+    // 1. Shorthand signature: useQuery(key, fn, options, client)
+    const todosQuery = useQuery(
+      ['todos-list'],
+      async () => ['Buy milk', 'Code in Angora'],
+      { staleTime: 5000 },
+      client
+    );
+
+    expect(todosQuery.isLoading()).toBe(true);
+    await new Promise(r => setTimeout(r, 20));
+    expect(todosQuery.isLoading()).toBe(false);
+    expect(todosQuery.data()).toEqual(['Buy milk', 'Code in Angora']);
+
+    // 2. Options object signature: useQuery({ queryKey, queryFn })
+    const staticQuery = useQuery(
+      {
+        queryKey: ['settings'],
+        queryFn: async () => ({ theme: 'dark' }),
+      },
+      client
+    );
+
+    expect(staticQuery.isLoading()).toBe(true);
+    await new Promise(r => setTimeout(r, 20));
+    expect(staticQuery.isLoading()).toBe(false);
+    expect(staticQuery.data()).toEqual({ theme: 'dark' });
+  });
+
+  test('useMutation supports function shorthand and useQueryClient()', async () => {
+    const qc = useQueryClient(client);
+    expect(qc).toBe(client);
+
+    let savedItem = '';
+    const addMutation = useMutation(
+      async (text: string) => {
+        savedItem = text;
+        return { success: true, item: text };
+      },
+      {
+        onSuccess: res => {
+          qc.setQueryData(['lastSaved'], res.item);
+        },
+      },
+      client
+    );
+
+    expect(addMutation.isLoading()).toBe(false);
+    await addMutation.mutateAsync('Angora is fast');
+
+    expect(savedItem).toBe('Angora is fast');
+    expect(addMutation.status()).toBe('success');
+    expect(qc.getQueryData(['lastSaved'])).toBe('Angora is fast');
   });
 });

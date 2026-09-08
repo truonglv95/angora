@@ -89,3 +89,50 @@ export function createMutation<TData = unknown, TVariables = void, TContext = un
     reset,
   };
 }
+
+/**
+ * Ultra-lean mutation hook for Angora applications.
+ * Supports:
+ * - Shorthand: `useMutation((newTodo) => api.addTodo(newTodo), { onSuccess: ... })`
+ * - Options object: `useMutation({ mutationFn, onSuccess, onError })`
+ */
+export function useMutation<TData = unknown, TVariables = void, TContext = unknown>(
+  mutationFn: (variables: TVariables) => Promise<TData>,
+  options?: Omit<MutationOptions<TData, TVariables, TContext>, 'mutationFn'>,
+  customClient?: QueryClient
+): MutationResult<TData, TVariables>;
+export function useMutation<TData = unknown, TVariables = void, TContext = unknown>(
+  options: MutationOptions<TData, TVariables, TContext>,
+  customClient?: QueryClient
+): MutationResult<TData, TVariables>;
+export function useMutation<TData = unknown, TVariables = void, TContext = unknown>(
+  arg1: ((variables: TVariables) => Promise<TData>) | MutationOptions<TData, TVariables, TContext>,
+  arg2?: Omit<MutationOptions<TData, TVariables, TContext>, 'mutationFn'> | QueryClient,
+  arg3?: QueryClient
+): MutationResult<TData, TVariables> {
+  if (typeof arg1 === 'function') {
+    const extra =
+      arg2 &&
+      (typeof (arg2 as any).onSuccess === 'function' ||
+        typeof (arg2 as any).onError === 'function' ||
+        typeof (arg2 as any).onMutate === 'function' ||
+        typeof (arg2 as any).onSettled === 'function')
+        ? (arg2 as Omit<MutationOptions<TData, TVariables, TContext>, 'mutationFn'>)
+        : {};
+    const client =
+      typeof (arg2 as any)?.getOrCreateEntry === 'function' ? (arg2 as QueryClient) : arg3;
+    return createMutation<TData, TVariables, TContext>(
+      {
+        mutationFn: arg1,
+        ...extra,
+      },
+      client
+    );
+  }
+  return createMutation<TData, TVariables, TContext>(
+    arg1 as MutationOptions<TData, TVariables, TContext>,
+    arg2 as QueryClient | undefined
+  );
+}
+
+export const mutation = useMutation;
