@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { Window } from 'happy-dom';
 import '@angora-js/compiler';
-import { signal, Component } from '@angora-js/core';
+import { signal, effect, Component } from '@angora-js/core';
 import {
   createElement,
   createText,
@@ -280,5 +280,36 @@ describe('@angora-js/runtime - Fine-grained DOM Operations', () => {
 
     status.set('error');
     expect(container.innerHTML).toContain('Something went wrong');
+  });
+
+  test('should automatically batch multiple signal mutations in event handlers', () => {
+    const first = signal('John');
+    const last = signal('Doe');
+    let effectRunCount = 0;
+
+    const unbindEffect = effect(() => {
+      // Reads both signals
+      first();
+      last();
+      effectRunCount++;
+    });
+
+    expect(effectRunCount).toBe(1);
+
+    const button = createElement('button');
+    bindEvent(button, 'click', () => {
+      first.set('Jane');
+      last.set('Smith');
+    });
+
+    button.dispatchEvent(new Event('click'));
+
+    // Without automatic batching, this would be 3 (1 initial + 2 individual updates).
+    // With automatic batching, it must be exactly 2 (1 initial + 1 batched update)!
+    expect(effectRunCount).toBe(2);
+    expect(first()).toBe('Jane');
+    expect(last()).toBe('Smith');
+
+    unbindEffect();
   });
 });

@@ -230,4 +230,14 @@ describe('@angora-js/core - Signals Engine', () => {
 
     expect(defineComponent).toBe(component);
   });
+
+  test('should detect infinite effect loop and throw NG0103 error', () => {
+    const count = signal(0);
+    expect(() => {
+      effect(() => {
+        // Accidental recursive mutation without untrack()
+        count.set(count() + 1);
+      });
+    }).toThrow(/NG0103: Infinite effect loop detected/);
+  });
 });

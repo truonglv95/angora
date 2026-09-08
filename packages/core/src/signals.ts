@@ -148,6 +148,8 @@ export class EffectNode implements Subscriber {
   private dependencies = new Set<Dependency>();
   private isDestroyed = false;
   private effectFn: EffectFn;
+  private runCount = 0;
+  private static readonly MAX_ITERATIONS = 100;
 
   constructor(effectFn: EffectFn) {
     this.effectFn = effectFn;
@@ -173,6 +175,20 @@ export class EffectNode implements Subscriber {
 
   run(): void {
     if (this.isDestroyed) return;
+
+    if (++this.runCount > EffectNode.MAX_ITERATIONS) {
+      this.isDirty = false;
+      this.runCount = 0;
+      throw new Error(
+        `[Angora] NG0103: Infinite effect loop detected (exceeded ${EffectNode.MAX_ITERATIONS} iterations).\n` +
+          `An effect wrote to a signal it also subscribes to without untrack().`
+      );
+    }
+    if (this.runCount === 1) {
+      queueMicrotask(() => {
+        this.runCount = 0;
+      });
+    }
 
     this.isDirty = false;
 

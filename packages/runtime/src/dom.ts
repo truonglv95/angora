@@ -1,4 +1,4 @@
-import { effect } from '@angora-js/core';
+import { effect, batch } from '@angora-js/core';
 
 /**
  * Creates a template cloner function that clones a static HTML string using C++ template element
@@ -40,7 +40,7 @@ export function createComment(name: string = ''): Comment {
 
 /**
  * Binds a signal getter directly to a Text node or Element's textContent.
- * If target is a Comment node (e.g. from template cloning), it replaces it with a Text node.
+ * Uses micro-diffing on nodeValue to prevent redundant browser layout/paint triggers.
  */
 export function bindText(target: Node, getter: () => any): () => void {
   let node: Node = target;
@@ -49,24 +49,37 @@ export function bindText(target: Node, getter: () => any): () => void {
     target.parentNode?.replaceChild(textNode, target);
     node = textNode;
   }
+  let prevStr: string | null = null;
   return effect(() => {
     let val = getter();
     while (typeof val === 'function') {
       val = val();
     }
-    node.textContent = val === null || val === undefined ? '' : String(val);
+    const str = val === null || val === undefined ? '' : String(val);
+    if (str !== prevStr) {
+      prevStr = str;
+      if (node.nodeType === 3) {
+        node.nodeValue = str;
+      } else {
+        node.textContent = str;
+      }
+    }
   });
 }
 
 /**
- * Binds a signal getter to an element property or attribute
+ * Binds a signal getter to an element property or attribute with value diffing
  */
 export function bindProp(element: HTMLElement, propName: string, getter: () => any): () => void {
+  let prevVal: any = undefined;
   return effect(() => {
     let value = getter();
     if (typeof value === 'function') {
       value = value();
     }
+    if (value === prevVal) return;
+    prevVal = value;
+
     if (propName in element && !propName.includes('-')) {
       (element as any)[propName] = value;
     } else {
@@ -85,35 +98,47 @@ export function bindProp(element: HTMLElement, propName: string, getter: () => a
 
 /**
  * Binds a dynamic boolean class to an element: [class.active]="isActive"
+ * Micro-diffs boolean state to avoid redundant classList modifications.
  */
 export function bindClass(
   element: HTMLElement,
   className: string,
   getter: () => boolean
 ): () => void {
+  let prevBool: boolean | null = null;
   return effect(() => {
     let val = getter();
     if (typeof val === 'function') {
       val = (val as any)();
     }
-    element.classList.toggle(className, Boolean(val));
+    const bool = Boolean(val);
+    if (bool !== prevBool) {
+      prevBool = bool;
+      element.classList.toggle(className, bool);
+    }
   });
 }
 
 /**
  * Binds a dynamic style property to an element: [style.color]="textColor"
+ * Micro-diffs style string to avoid redundant inline style dirtying.
  */
 export function bindStyle(
   element: HTMLElement,
   styleProp: string,
   getter: () => string
 ): () => void {
+  let prevVal: string | null = null;
   return effect(() => {
     let val = getter();
     if (typeof val === 'function') {
       val = (val as any)();
     }
-    (element.style as any)[styleProp] = val ?? '';
+    const str = val ?? '';
+    if (str !== prevVal) {
+      prevVal = str;
+      (element.style as any)[styleProp] = str;
+    }
   });
 }
 
@@ -151,7 +176,7 @@ export function bindTwoWay(
     if ((element as any).type === 'checkbox') {
       newVal = (element as HTMLInputElement).checked;
     }
-    setter(newVal);
+    batch(() => setter(newVal));
   };
 
   element.addEventListener(eventName, onInput);
@@ -163,15 +188,19 @@ export function bindTwoWay(
 }
 
 /**
- * Binds an event listener to an element
+ * Binds an event listener to an element with automatic Signal batching.
+ * Prevents intermediate renders and DOM thrashing when handlers modify multiple signals.
  */
 export function bindEvent(
   element: HTMLElement,
   eventName: string,
   handler: (event: Event) => void
 ): () => void {
-  element.addEventListener(eventName, handler);
+  const batchedHandler = (event: Event) => {
+    batch(() => handler(event));
+  };
+  element.addEventListener(eventName, batchedHandler);
   return () => {
-    element.removeEventListener(eventName, handler);
+    element.removeEventListener(eventName, batchedHandler);
   };
 }
