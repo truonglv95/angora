@@ -82,4 +82,45 @@ describe('@angora-js/core - Input & Output Primitives', () => {
     tooltip.__set('Hover help text');
     expect(tooltip()).toBe('Hover help text');
   });
+
+  test('should create model() signal and synchronize two-way data', () => {
+    const { model, IS_MODEL_SIGNAL } = require('../src/index.ts');
+    const count = model(10);
+    expect(count[IS_MODEL_SIGNAL]).toBe(true);
+    expect(count()).toBe(10);
+
+    const emitted: number[] = [];
+    const unsub = count.subscribe((v: number) => emitted.push(v));
+
+    // Internal mutation emits to companion output
+    count.set(20);
+    expect(count()).toBe(20);
+    expect(emitted).toEqual([20]);
+
+    count.inc();
+    expect(count()).toBe(21);
+    expect(emitted).toEqual([20, 21]);
+
+    count(50);
+    expect(count()).toBe(50);
+    expect(emitted).toEqual([20, 21, 50]);
+
+    // Update from parent via __set must NOT emit back (prevents recursive infinite echo)
+    count.__set(100);
+    expect(count()).toBe(100);
+    expect(emitted).toEqual([20, 21, 50]); // Not added!
+
+    unsub();
+    count.set(200);
+    expect(emitted).toEqual([20, 21, 50]); // Unsubscribed
+  });
+
+  test('should support model.required()', () => {
+    const { model } = require('../src/index.ts');
+    const title = model.required<string>();
+    expect(title.__required).toBe(true);
+
+    title.__set('Angora Model');
+    expect(title()).toBe('Angora Model');
+  });
 });

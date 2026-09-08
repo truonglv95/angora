@@ -1,4 +1,4 @@
-import { signal, type Signal } from './signals.ts';
+import { signal, type Signal, type WritableSignal } from './signals.ts';
 
 export const IS_INPUT_SIGNAL = Symbol('__ANGORA_INPUT_SIGNAL__');
 export const IS_OUTPUT_EMITTER = Symbol('__ANGORA_OUTPUT_EMITTER__');
@@ -89,6 +89,129 @@ export function output<T = void>(options?: OutputOptions): OutputEmitter<T> {
     },
   };
 }
+
+export const IS_MODEL_SIGNAL = Symbol('__ANGORA_MODEL_SIGNAL__');
+
+export interface ModelOptions<T = any> {
+  alias?: string;
+}
+
+export interface ModelSignal<T> extends WritableSignal<T> {
+  [IS_MODEL_SIGNAL]: true;
+  [IS_INPUT_SIGNAL]: true;
+  [IS_OUTPUT_EMITTER]: true;
+  __required: boolean;
+  __alias?: string;
+  __set(value: T): void;
+  emit(value: T): void;
+  subscribe(handler: (value: T) => void): () => void;
+}
+
+export interface ModelFunction {
+  <T>(): ModelSignal<T | undefined>;
+  <T>(initialValue: T, options?: ModelOptions<T>): ModelSignal<T>;
+  required<T>(options?: ModelOptions<T>): ModelSignal<T>;
+}
+
+/**
+ * Creates a two-way bindable model signal for component inputs & companion outputs
+ * @example
+ * // Child component:
+ * count = model(0);
+ * // In parent template:
+ * <counter [(count)]="myCount" />
+ */
+export const model: ModelFunction = (<T>(
+  initialValue?: T,
+  options?: ModelOptions<T>
+): ModelSignal<T | undefined> => {
+  const internal = signal<T | undefined>(initialValue);
+  const listeners = new Set<(value: T | undefined) => void>();
+  let isUpdatingFromParent = false;
+
+  const emitToListeners = (val: T | undefined) => {
+    for (const listener of listeners) {
+      try {
+        listener(val);
+      } catch (err) {
+        console.error('Error in model listener:', err);
+      }
+    }
+  };
+
+  const modelSig = ((...args: [T?]) => {
+    if (args.length > 0) {
+      const val = args[0] as T;
+      internal(val);
+      if (!isUpdatingFromParent) {
+        emitToListeners(val);
+      }
+      return val;
+    }
+    return internal();
+  }) as unknown as ModelSignal<T | undefined>;
+
+  (modelSig as any)[IS_MODEL_SIGNAL] = true;
+  (modelSig as any)[IS_INPUT_SIGNAL] = true;
+  (modelSig as any)[IS_OUTPUT_EMITTER] = true;
+  modelSig.__required = false;
+  modelSig.__alias = options?.alias;
+
+  modelSig.__set = (val: T | undefined) => {
+    isUpdatingFromParent = true;
+    try {
+      internal(val);
+    } finally {
+      isUpdatingFromParent = false;
+    }
+  };
+
+  modelSig.set = (val: T | undefined) => {
+    internal.set(val);
+    if (!isUpdatingFromParent) {
+      emitToListeners(val);
+    }
+  };
+
+  modelSig.update = (updater: (prev: T | undefined) => T | undefined) => {
+    const next = updater(internal());
+    internal.set(next);
+    if (!isUpdatingFromParent) {
+      emitToListeners(next);
+    }
+  };
+
+  (modelSig as any).inc = (delta = 1) => {
+    (modelSig as any).update((prev: any) => prev + delta);
+  };
+  (modelSig as any).dec = (delta = 1) => {
+    (modelSig as any).update((prev: any) => prev - delta);
+  };
+  (modelSig as any).toggle = () => {
+    (modelSig as any).update((prev: any) => !prev);
+  };
+
+  modelSig.asReadonly = () => internal.asReadonly();
+
+  modelSig.emit = (value: T | undefined) => {
+    modelSig.set(value);
+  };
+
+  modelSig.subscribe = (handler: (value: T | undefined) => void) => {
+    listeners.add(handler);
+    return () => {
+      listeners.delete(handler);
+    };
+  };
+
+  return modelSig;
+}) as ModelFunction;
+
+model.required = <T>(options?: ModelOptions<T>): ModelSignal<T> => {
+  const m = model<T>(undefined as unknown as T, options);
+  m.__required = true;
+  return m as ModelSignal<T>;
+};
 
 /**
  * Coerces a data-bound value (typically a string) to a boolean.

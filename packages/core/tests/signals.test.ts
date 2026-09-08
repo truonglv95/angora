@@ -206,4 +206,28 @@ describe('@angora-js/core - Signals Engine', () => {
     isOpen.toggle();
     expect(isOpen()).toBe(false);
   });
+
+  test('should support component() and defineComponent() functional factories', () => {
+    const { component, defineComponent, getComponentDef } = require('../src/index.ts');
+
+    const Counter = component({
+      selector: 'func-counter',
+      template: '<button>{{ count() }}</button>',
+      setup() {
+        const count = signal(42);
+        return { count };
+      },
+    });
+
+    const def = getComponentDef(Counter);
+    expect(def?.selector).toBe('func-counter');
+    expect(def?.metadata?.template).toBe('<button>{{ count() }}</button>');
+
+    const instance = new (Counter as any)();
+    expect(instance.count()).toBe(42);
+    instance.count.inc();
+    expect(instance.count()).toBe(43);
+
+    expect(defineComponent).toBe(component);
+  });
 });

@@ -178,7 +178,14 @@ export function mountComponent<T = any>(
   // 4. Bind event outputs
   if (options.outputs) {
     for (const [eventName, handler] of Object.entries(options.outputs)) {
-      const outputProp = instance[eventName];
+      let outputProp = instance[eventName];
+      if (!outputProp && eventName.endsWith('Change')) {
+        const modelPropName = eventName.slice(0, -6);
+        const modelSignal = instance[modelPropName];
+        if (modelSignal && typeof modelSignal.subscribe === 'function') {
+          outputProp = modelSignal;
+        }
+      }
       if (outputProp && typeof outputProp.subscribe === 'function') {
         const unsubscribe = outputProp.subscribe(handler);
         cleanups.push(unsubscribe);

@@ -218,4 +218,59 @@ describe('@angora-js/runtime - Nested Components & Inputs/Outputs', () => {
 
     ref?.destroy();
   });
+
+  test('should support model() two-way binding with automatic companion output', () => {
+    const { model } = require('@angora-js/core');
+
+    @Component({
+      selector: 'stepper-counter',
+      template: `<button (click)="count.inc()">Increment</button>`,
+    })
+    class StepperCounterComponent {
+      count = model(0);
+    }
+
+    const parentVal = signal(10);
+    @Component({
+      selector: 'parent-comp',
+      template: '',
+      imports: [StepperCounterComponent],
+    })
+    class ParentComponent {
+      parentVal = parentVal;
+    }
+    const parentCtx = new ParentComponent();
+
+    const host = doc.createElement('stepper-counter') as HTMLElement;
+    doc.body.appendChild(host);
+
+    const ref = mountComponent('stepper-counter', host, parentCtx, rootInjector, {
+      inputs: {
+        count: () => parentVal(),
+      },
+      outputs: {
+        countChange: ($event: number) => {
+          parentVal.set($event);
+        },
+      },
+    });
+
+    expect(ref).not.toBeNull();
+    // Child received initial value from parent
+    expect(ref?.instance.count()).toBe(10);
+
+    // When child mutates model, parent signal updates automatically!
+    ref?.instance.count.inc();
+    expect(ref?.instance.count()).toBe(11);
+    expect(parentVal()).toBe(11);
+
+    ref?.instance.count(50);
+    expect(parentVal()).toBe(50);
+
+    // When parent updates, child updates
+    parentVal.set(100);
+    expect(ref?.instance.count()).toBe(100);
+
+    ref?.destroy();
+  });
 });

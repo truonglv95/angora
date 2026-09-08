@@ -146,6 +146,34 @@ describe('@angora-js/core - signalStore() Fine-Grained Deep Reactive Store', () 
     app.count = 10;
     expect(observed).toBe(10);
   });
+
+  it('should support reactive(), toRef(), and toRefs() for destructuring state without losing reactivity', () => {
+    const { reactive, toRef, toRefs } = require('../src/index.ts');
+
+    const state = reactive({
+      count: 0,
+      user: {
+        name: 'Alex',
+      },
+    });
+
+    const countRef = toRef(state, 'count');
+    expect(countRef()).toBe(0);
+
+    countRef.inc(5);
+    expect(state.count).toBe(5);
+    expect(countRef()).toBe(5);
+
+    // Destructure with toRefs
+    const { count, user } = toRefs(state);
+    expect(count()).toBe(5);
+
+    count(100);
+    expect(state.count).toBe(100);
+
+    count.inc();
+    expect(state.count).toBe(101);
+  });
 });
 
 describe('@angora-js/runtime - createErrorBoundary() Fault Tolerance', () => {

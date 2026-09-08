@@ -1,4 +1,4 @@
-import { signal, untrack, type Signal } from './signals.ts';
+import { signal, untrack, type Signal, type WritableSignal } from './signals.ts';
 
 const PROXY_TARGET = Symbol('__ANGORA_STORE_TARGET__');
 const STORE_SIGNALS = Symbol('__ANGORA_STORE_SIGNALS__');
@@ -81,3 +81,59 @@ export function signalStore<T extends object>(initialValue: T): T {
 }
 
 export const createStore = signalStore;
+export const reactive = signalStore;
+
+/**
+ * Converts a single property of a reactive object into a WritableSignal
+ * @example
+ * const state = reactive({ count: 0 });
+ * const countRef = toRef(state, 'count');
+ * countRef.inc(); // Updates state.count to 1
+ */
+export function toRef<T extends object, K extends keyof T>(
+  object: T,
+  key: K
+): WritableSignal<T[K]> {
+  const getter = ((...args: [T[K]?]) => {
+    if (args.length > 0) {
+      object[key] = args[0] as T[K];
+      return args[0] as T[K];
+    }
+    return object[key];
+  }) as unknown as WritableSignal<T[K]>;
+
+  getter.set = (val: T[K]) => {
+    object[key] = val;
+  };
+  getter.update = (updater: (prev: T[K]) => T[K]) => {
+    object[key] = updater(object[key]);
+  };
+  (getter as any).inc = (delta = 1) => {
+    (object as any)[key] = ((object as any)[key] as number) + delta;
+  };
+  (getter as any).dec = (delta = 1) => {
+    (object as any)[key] = ((object as any)[key] as number) - delta;
+  };
+  (getter as any).toggle = () => {
+    (object as any)[key] = !((object as any)[key] as boolean);
+  };
+  getter.asReadonly = () => (() => object[key]) as Signal<T[K]>;
+
+  return getter;
+}
+
+/**
+ * Converts all properties of a reactive object into an object of WritableSignals.
+ * Allows safe destructuring of reactive state!
+ * @example
+ * const state = reactive({ count: 0, title: 'Angora' });
+ * const { count, title } = toRefs(state);
+ * count.inc(); // Updates state.count to 1!
+ */
+export function toRefs<T extends object>(object: T): { [K in keyof T]: WritableSignal<T[K]> } {
+  const result = {} as { [K in keyof T]: WritableSignal<T[K]> };
+  for (const key of Object.keys(object) as (keyof T)[]) {
+    result[key] = toRef(object, key);
+  }
+  return result;
+}

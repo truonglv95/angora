@@ -1,4 +1,4 @@
-import { signal, InjectionToken, inject, type Provider } from '@angora-js/core';
+import { signal, type Signal, InjectionToken, inject, type Provider } from '@angora-js/core';
 import type {
   Route,
   Routes,
@@ -492,4 +492,44 @@ export function provideRouter(
     { provide: ROUTER_OPTIONS, useValue: resolvedConfig },
     Router,
   ];
+}
+
+/**
+ * Concise composable hook to inject the active Router instance
+ * @example
+ * const router = useRouter();
+ * router.navigate('/dashboard');
+ */
+export function useRouter(): Router {
+  return inject(Router);
+}
+
+/**
+ * Concise composable hook returning the reactive params signal
+ * @example
+ * const params = useParams();
+ * console.log(params().id);
+ */
+export function useParams(): Signal<Record<string, string>> {
+  return useRouter().params;
+}
+
+/**
+ * Concise composable hook returning the reactive queryParams signal
+ * @example
+ * const query = useQueryParams();
+ * console.log(query().search);
+ */
+export function useQueryParams(): Signal<Record<string, string>> {
+  return useRouter().queryParams;
+}
+
+/**
+ * Concise composable hook returning the active route url signal
+ * @example
+ * const url = useRoute();
+ * console.log(url());
+ */
+export function useRoute(): Signal<string> {
+  return useRouter().url;
 }

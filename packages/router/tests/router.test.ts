@@ -62,4 +62,21 @@ describe('@angora-js/router - SPA Routing Engine', () => {
     expect(match).not.toBeNull();
     expect(match?.route.path).toBe('**');
   });
+
+  test('should support composables: useRouter, useParams, useQueryParams, useRoute', () => {
+    const { useRouter, useParams, useQueryParams, useRoute } = require('../src/index.ts');
+    const injector = new Injector(provideRouter(routes));
+
+    runInInjectionContext(injector, () => {
+      const router = useRouter();
+      expect(router).toBeInstanceOf(Router);
+
+      const params = useParams();
+      const url = useRoute();
+
+      router.navigate('/users/777');
+      expect(params()).toEqual({ id: '777' });
+      expect(url()).toBe('/users/777');
+    });
+  });
 });
