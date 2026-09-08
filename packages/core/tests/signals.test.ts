@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { signal, computed, effect, batch, untrack } from '../src/index';
+import { signal, computed, effect, batch, untrack, resetDevMode } from '../src/index';
 
 describe('@angora-js/core - Signals Engine', () => {
   test('should create signal and read/update value', () => {
@@ -248,5 +248,16 @@ describe('@angora-js/core - Signals Engine', () => {
     expect((cartCount as any).debugName).toBe('cartCount');
     expect((cartCount.asReadonly() as any).debugName).toBe('cartCount');
     expect((doubleCart as any).debugName).toBe('doubleCart');
+  });
+
+  test('should automatically generate debug names for signals and computeds in dev mode', () => {
+    resetDevMode();
+    const sig1 = signal('first');
+    const sig2 = signal('second');
+    const comp1 = computed(() => sig1() + sig2());
+
+    expect((sig1 as any).debugName).toMatch(/^signal#\d+$/);
+    expect((sig2 as any).debugName).toMatch(/^signal#\d+$/);
+    expect((comp1 as any).debugName).toMatch(/^computed#\d+$/);
   });
 });

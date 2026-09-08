@@ -3,6 +3,8 @@
  * Glitch-free, lightweight, zero-dependency.
  */
 
+import { isDevMode } from './environment.ts';
+
 export type CleanupFn = () => void;
 export type EffectFn = (onCleanup: (cleanup: CleanupFn) => void) => void;
 
@@ -256,6 +258,14 @@ export function isSignal(val: any): boolean {
  * count.set(1);
  * count.update(c => c + 1);
  */
+let autoSignalCounter = 0;
+let autoComputedCounter = 0;
+
+export function resetAutoSignalCounters(): void {
+  autoSignalCounter = 0;
+  autoComputedCounter = 0;
+}
+
 export function signal<T>(
   initialValue: T,
   options?: { equal?: (a: T, b: T) => boolean; name?: string }
@@ -271,8 +281,12 @@ export function signal<T>(
   }) as unknown as WritableSignal<T>;
 
   (getter as any)[IS_SIGNAL] = true;
-  if (options?.name) {
-    (getter as any).debugName = options.name;
+  let debugName = options?.name;
+  if (!debugName && isDevMode()) {
+    debugName = `signal#${++autoSignalCounter}`;
+  }
+  if (debugName) {
+    (getter as any).debugName = debugName;
   }
   getter.set = (val: T) => node.set(val);
   getter.update = (updater: (prev: T) => T) => node.update(updater);
@@ -288,8 +302,8 @@ export function signal<T>(
   getter.asReadonly = () => {
     const ro = (() => node.get()) as Signal<T>;
     (ro as any)[IS_SIGNAL] = true;
-    if (options?.name) {
-      (ro as any).debugName = options.name;
+    if ((getter as any).debugName) {
+      (ro as any).debugName = (getter as any).debugName;
     }
     return ro;
   };
@@ -311,8 +325,12 @@ export function computed<T>(
   const node = new ComputedNode(fn, options?.equal);
   const getter = (() => node.get()) as Signal<T>;
   (getter as any)[IS_SIGNAL] = true;
-  if (options?.name) {
-    (getter as any).debugName = options.name;
+  let debugName = options?.name;
+  if (!debugName && isDevMode()) {
+    debugName = `computed#${++autoComputedCounter}`;
+  }
+  if (debugName) {
+    (getter as any).debugName = debugName;
   }
   return getter;
 }

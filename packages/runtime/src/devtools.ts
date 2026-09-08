@@ -80,7 +80,15 @@ export function attachComponentDevTools(
 
           signals[key] = currentVal;
           const sigId = `sig_${compId}_${key}`;
-          const displayName = (prop as any).debugName || key;
+          let displayName = (prop as any).debugName;
+          if (
+            !displayName ||
+            displayName.startsWith('signal#') ||
+            displayName.startsWith('computed#')
+          ) {
+            displayName = `${className}.${key}`;
+            (prop as any).debugName = displayName;
+          }
           backend.registerSignal(
             sigId,
             displayName,
@@ -119,7 +127,7 @@ export function attachComponentDevTools(
           const formVal = prop.rawValue();
           signals[`${key}.value`] = formVal;
           const sigIdVal = `sig_${compId}_${key}_value`;
-          backend.registerSignal(sigIdVal, `${key}.value`, formVal, false, compId);
+          backend.registerSignal(sigIdVal, `${className}.${key}.value`, formVal, false, compId);
 
           if (backend.signals.has(sigIdVal)) {
             (backend.signals.get(sigIdVal) as any).signalRef = {
@@ -137,7 +145,13 @@ export function attachComponentDevTools(
 
           if (isSignal(prop.status)) {
             const sigIdStatus = `sig_${compId}_${key}_status`;
-            backend.registerSignal(sigIdStatus, `${key}.status`, prop.status(), true, compId);
+            backend.registerSignal(
+              sigIdStatus,
+              `${className}.${key}.status`,
+              prop.status(),
+              true,
+              compId
+            );
             const stopStatusEffect = effect(() => {
               try {
                 backend.updateSignal(sigIdStatus, prop.status());
