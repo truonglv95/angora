@@ -143,4 +143,38 @@ describe('@angora-js/devtools - Chrome Extension DevTools Backend Engine', () =>
     expect(comp?.lastRenderDuration).toBe(0.8);
     expect(backend.events.some(e => e.type === 'hmr:update')).toBe(true);
   });
+
+  test('should support time-travel debugging to revert signals to previous states', () => {
+    const backend = getDevToolsBackend();
+    const countSig = signal(10);
+    backend.registerSignal('sig_count', 'count', 10, false, 'comp_1', countSig);
+
+    // Perform several state mutations
+    countSig.set(20);
+    backend.updateSignal('sig_count', 20);
+
+    countSig.set(30);
+    backend.updateSignal('sig_count', 30);
+
+    const snapshot = backend.signals.get('sig_count');
+    expect(snapshot?.history.length).toBe(3); // 10, 20, 30
+    expect(countSig()).toBe(30);
+
+    // Time-travel back to step 0 (initial value = 10)
+    const success = backend.timeTravelSignal('sig_count', 0);
+    expect(success).toBe(true);
+    expect(countSig()).toBe(10);
+    expect(backend.signals.get('sig_count')?.value).toBe(10);
+
+    // Time-travel forward to step 1 (value = 20)
+    backend.timeTravelSignal('sig_count', 1);
+    expect(countSig()).toBe(20);
+
+    // Verify unified timeline extraction
+    const timeline = backend.getTimeline();
+    expect(timeline.length).toBe(3);
+    expect(timeline[0].value).toBe(10);
+    expect(timeline[1].value).toBe(20);
+    expect(timeline[2].value).toBe(30);
+  });
 });

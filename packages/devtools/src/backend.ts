@@ -48,6 +48,7 @@ export interface DevToolsEvent {
     | 'hmr:update'
     | 'signal:register'
     | 'signal:update'
+    | 'signal:timetravel'
     | 'route:change'
     | 'timing:record';
   timestamp: number;
@@ -116,7 +117,8 @@ export class AngoraDevToolsBackend {
     name: string,
     initialValue: any,
     isComputed = false,
-    componentId?: string
+    componentId?: string,
+    signalRef?: any
   ): void {
     if (this.mode === 'disabled') return;
 
@@ -126,6 +128,7 @@ export class AngoraDevToolsBackend {
       value: initialValue,
       componentId,
       isComputed,
+      signalRef,
       history: this.maxHistory > 0 ? [{ value: initialValue, timestamp: Date.now() }] : [],
     };
     this.signals.set(id, snapshot);
@@ -181,6 +184,95 @@ export class AngoraDevToolsBackend {
     }
     this.updateSignal(id, nextValue);
     return true;
+  }
+
+  /**
+   * Time-travels a specific signal to a previous point in its mutation history.
+   * Restores the signal value and triggers fine-grained reactivity in the DOM.
+   */
+  public timeTravelSignal(id: string, historyIndex: number): boolean {
+    if (this.mode !== 'full' || !this.allowMutation) return false;
+
+    const sig = this.signals.get(id);
+    if (!sig || !sig.history || historyIndex < 0 || historyIndex >= sig.history.length) {
+      return false;
+    }
+
+    const targetEntry = sig.history[historyIndex];
+    const targetValue = targetEntry.value;
+
+    const targetRef = sig.signalRef;
+    if (targetRef) {
+      if (typeof targetRef.set === 'function') {
+        targetRef.set(targetValue);
+      } else if (typeof targetRef.__set === 'function') {
+        targetRef.__set(targetValue);
+      }
+    }
+
+    sig.value = targetValue;
+    this.emit({
+      type: 'signal:timetravel',
+      timestamp: Date.now(),
+      payload: { id, value: targetValue, historyIndex },
+    });
+    return true;
+  }
+
+  /**
+   * Reverts all signals in the application to their state at or immediately before a given timestamp.
+   */
+  public timeTravelToTimestamp(targetTimestamp: number): boolean {
+    if (this.mode !== 'full' || !this.allowMutation) return false;
+
+    let restoredAny = false;
+    for (const [id, sig] of this.signals.entries()) {
+      if (!sig.history || sig.history.length === 0) continue;
+      let matchedIndex = -1;
+      for (let i = sig.history.length - 1; i >= 0; i--) {
+        if (sig.history[i].timestamp <= targetTimestamp) {
+          matchedIndex = i;
+          break;
+        }
+      }
+      if (matchedIndex !== -1) {
+        this.timeTravelSignal(id, matchedIndex);
+        restoredAny = true;
+      }
+    }
+    return restoredAny;
+  }
+
+  /**
+   * Returns a unified chronological timeline of all signal mutations across the app.
+   */
+  public getTimeline(): Array<{
+    id: string;
+    name: string;
+    value: any;
+    timestamp: number;
+    historyIndex: number;
+  }> {
+    const timeline: Array<{
+      id: string;
+      name: string;
+      value: any;
+      timestamp: number;
+      historyIndex: number;
+    }> = [];
+    for (const [id, sig] of this.signals.entries()) {
+      if (!sig.history) continue;
+      sig.history.forEach((entry, idx) => {
+        timeline.push({
+          id,
+          name: sig.name,
+          value: entry.value,
+          timestamp: entry.timestamp,
+          historyIndex: idx,
+        });
+      });
+    }
+    return timeline.sort((a, b) => a.timestamp - b.timestamp);
   }
 
   public selectComponent(id: string): ComponentNode | null {

@@ -311,6 +311,7 @@ class DevToolsPanelController {
                   <td style="padding: 6px 4px;"><code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px; font-size: 12px;">${JSON.stringify(s.value)}</code></td>
                   <td style="padding: 6px 4px; text-align: right;">
                     ${!s.isComputed ? `<button class="edit-comp-sig-btn" data-sig-id="${s.id}" data-sig-name="${s.name}" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">Edit</button>` : ''}
+                    ${!s.isComputed && s.history && s.history.length > 1 ? `<button class="revert-comp-sig-btn" data-sig-id="${s.id}" data-sig-name="${s.name}" style="background: var(--bg-card); border: 1px solid #6366f1; color: #818cf8; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-left: 4px;">⏪ Revert</button>` : ''}
                   </td>
                 </tr>`
               )
@@ -395,6 +396,35 @@ class DevToolsPanelController {
         }
       });
     });
+
+    detail.querySelectorAll('.revert-comp-sig-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sigId = (btn as HTMLElement).dataset.sigId;
+        const sigName = (btn as HTMLElement).dataset.sigName;
+        if (!sigId) return;
+        const sig = this.signals.find(s => s.id === sigId);
+        if (!sig || !sig.history || sig.history.length <= 1) return;
+
+        const historySteps = sig.history
+          .map(
+            (h, idx) =>
+              `[Step ${idx}]: ${JSON.stringify(h.value)} (${new Date(h.timestamp).toLocaleTimeString()})`
+          )
+          .join('\n');
+
+        const stepStr = prompt(
+          `Time-Travel Signal "${sigName || sigId}"\nEnter step index to revert (0 to ${sig.history.length - 1}):\n\n${historySteps}`,
+          String(sig.history.length - 2)
+        );
+
+        if (stepStr !== null) {
+          const step = parseInt(stepStr, 10);
+          if (!isNaN(step) && step >= 0 && step < sig.history.length) {
+            this.timeTravelSignal(sigId, step);
+          }
+        }
+      });
+    });
   }
 
   private renderSignals(): void {
@@ -424,6 +454,7 @@ class DevToolsPanelController {
           <td>${s.history ? s.history.length : 0}</td>
           <td>
             ${!s.isComputed ? `<button class="edit-btn" data-id="${s.id}" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 8px; border-radius: 4px; cursor: pointer;">Edit</button>` : ''}
+            ${!s.isComputed && s.history && s.history.length > 1 ? `<button class="revert-btn" data-id="${s.id}" style="background: var(--bg-card); border: 1px solid #6366f1; color: #818cf8; padding: 2px 8px; border-radius: 4px; cursor: pointer; margin-left: 4px;">⏪ Revert</button>` : ''}
           </td>
         </tr>`
       )
@@ -447,6 +478,51 @@ class DevToolsPanelController {
         }
       });
     });
+
+    tbody.querySelectorAll('.revert-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = (btn as HTMLElement).dataset.id;
+        if (!id) return;
+        const sig = this.signals.find(s => s.id === id);
+        if (!sig || !sig.history || sig.history.length <= 1) return;
+
+        const historySteps = sig.history
+          .map(
+            (h, idx) =>
+              `[Step ${idx}]: ${JSON.stringify(h.value)} (${new Date(h.timestamp).toLocaleTimeString()})`
+          )
+          .join('\n');
+
+        const stepStr = prompt(
+          `Time-Travel Signal "${sig.name}" (${sig.id})\nEnter step index to revert (0 to ${sig.history.length - 1}):\n\n${historySteps}`,
+          String(sig.history.length - 2)
+        );
+
+        if (stepStr !== null) {
+          const step = parseInt(stepStr, 10);
+          if (!isNaN(step) && step >= 0 && step < sig.history.length) {
+            this.timeTravelSignal(id, step);
+          }
+        }
+      });
+    });
+  }
+
+  private timeTravelSignal(id: string, historyIndex: number): void {
+    if (typeof chrome !== 'undefined' && chrome.devtools && chrome.devtools.inspectedWindow) {
+      chrome.devtools.inspectedWindow.eval(
+        `window.__ANGORA_DEVTOOLS_BACKEND__?.timeTravelSignal(${JSON.stringify(id)}, ${historyIndex})`,
+        () => {
+          this.loadState();
+        }
+      );
+    } else {
+      const backend = (window as any).__ANGORA_DEVTOOLS_BACKEND__;
+      if (backend) {
+        backend.timeTravelSignal(id, historyIndex);
+        this.loadState();
+      }
+    }
   }
 
   private updateSignalValue(id: string, value: any): void {

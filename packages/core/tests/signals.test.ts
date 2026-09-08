@@ -240,4 +240,13 @@ describe('@angora-js/core - Signals Engine', () => {
       });
     }).toThrow(/NG0103: Infinite effect loop detected/);
   });
+
+  test('should support debug name option in signal and computed for devtools', () => {
+    const cartCount = signal(5, { name: 'cartCount' });
+    const doubleCart = computed(() => cartCount() * 2, { name: 'doubleCart' });
+
+    expect((cartCount as any).debugName).toBe('cartCount');
+    expect((cartCount.asReadonly() as any).debugName).toBe('cartCount');
+    expect((doubleCart as any).debugName).toBe('doubleCart');
+  });
 });

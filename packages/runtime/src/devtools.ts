@@ -80,7 +80,15 @@ export function attachComponentDevTools(
 
           signals[key] = currentVal;
           const sigId = `sig_${compId}_${key}`;
-          backend.registerSignal(sigId, key, currentVal, isComputed, compId);
+          const displayName = (prop as any).debugName || key;
+          backend.registerSignal(
+            sigId,
+            displayName,
+            currentVal,
+            isComputed,
+            compId,
+            isWritable ? prop : undefined
+          );
 
           // Store reference to signal for live DevTools editing
           if (isWritable && backend.signals.has(sigId)) {

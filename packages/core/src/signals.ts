@@ -258,7 +258,7 @@ export function isSignal(val: any): boolean {
  */
 export function signal<T>(
   initialValue: T,
-  options?: { equal?: (a: T, b: T) => boolean }
+  options?: { equal?: (a: T, b: T) => boolean; name?: string }
 ): WritableSignal<T> {
   const node = new SignalNode(initialValue, options?.equal);
 
@@ -271,6 +271,9 @@ export function signal<T>(
   }) as unknown as WritableSignal<T>;
 
   (getter as any)[IS_SIGNAL] = true;
+  if (options?.name) {
+    (getter as any).debugName = options.name;
+  }
   getter.set = (val: T) => node.set(val);
   getter.update = (updater: (prev: T) => T) => node.update(updater);
   (getter as any).inc = (delta = 1) => {
@@ -285,6 +288,9 @@ export function signal<T>(
   getter.asReadonly = () => {
     const ro = (() => node.get()) as Signal<T>;
     (ro as any)[IS_SIGNAL] = true;
+    if (options?.name) {
+      (ro as any).debugName = options.name;
+    }
     return ro;
   };
 
@@ -298,10 +304,16 @@ export function signal<T>(
  * const double = computed(() => count() * 2);
  * console.log(double()); // 20
  */
-export function computed<T>(fn: () => T, options?: { equal?: (a: T, b: T) => boolean }): Signal<T> {
+export function computed<T>(
+  fn: () => T,
+  options?: { equal?: (a: T, b: T) => boolean; name?: string }
+): Signal<T> {
   const node = new ComputedNode(fn, options?.equal);
   const getter = (() => node.get()) as Signal<T>;
   (getter as any)[IS_SIGNAL] = true;
+  if (options?.name) {
+    (getter as any).debugName = options.name;
+  }
   return getter;
 }
 

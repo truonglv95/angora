@@ -312,4 +312,38 @@ describe('@angora-js/runtime - Fine-grained DOM Operations', () => {
 
     unbindEffect();
   });
+
+  test('should support global event delegation with connected elements and stopPropagation', () => {
+    const parent = createElement('div');
+    const child = createElement('button');
+    parent.appendChild(child);
+    document.body.appendChild(parent);
+
+    let parentClicked = false;
+    let childClicked = false;
+
+    bindEvent(parent, 'click', () => {
+      parentClicked = true;
+    });
+
+    const unbindChild = bindEvent(child, 'click', e => {
+      childClicked = true;
+      e.stopPropagation();
+    });
+
+    child.dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(childClicked).toBe(true);
+    expect(parentClicked).toBe(false); // Stopped propagation
+
+    // Now unbind child and click again, allowing bubbling to parent
+    unbindChild();
+    childClicked = false;
+    child.dispatchEvent(new Event('click', { bubbles: true }));
+
+    expect(childClicked).toBe(false);
+    expect(parentClicked).toBe(true);
+
+    document.body.removeChild(parent);
+  });
 });

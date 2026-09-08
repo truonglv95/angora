@@ -5,13 +5,16 @@ import { effect, batch } from '@angora-js/core';
  */
 export function template<T extends Node = HTMLElement>(html: string): () => T {
   let t: HTMLTemplateElement;
+  let cachedDoc: Document | null = null;
   return () => {
-    if (!t) {
-      t = document.createElement('template');
+    const curDoc = typeof document !== 'undefined' ? document : null;
+    if (!t || cachedDoc !== curDoc) {
+      cachedDoc = curDoc;
+      t = (curDoc || document).createElement('template');
       t.innerHTML = html;
     }
     const root = t.content.firstElementChild || t.content.firstChild;
-    return (root ? root.cloneNode(true) : document.createDocumentFragment()) as T;
+    return (root ? root.cloneNode(true) : (curDoc || document).createDocumentFragment()) as T;
   };
 }
 
@@ -187,9 +190,69 @@ export function bindTwoWay(
   };
 }
 
+const DELEGATED_EVENTS = new Set([
+  'click',
+  'dblclick',
+  'mousedown',
+  'mouseup',
+  'contextmenu',
+  'input',
+  'change',
+  'keydown',
+  'keyup',
+  'submit',
+  'pointerdown',
+  'pointerup',
+]);
+
+const delegatedDocuments = new WeakMap<Document, Set<string>>();
+
+function ensureDelegatedListener(doc: Document, eventName: string): void {
+  let registered = delegatedDocuments.get(doc);
+  if (!registered) {
+    registered = new Set<string>();
+    delegatedDocuments.set(doc, registered);
+  }
+
+  if (registered.has(eventName)) return;
+  registered.add(eventName);
+
+  doc.addEventListener(eventName, (e: Event) => {
+    let curr: Node | null = e.target as Node;
+    const propKey = `__angora_ev_${eventName}`;
+
+    while (curr && curr !== doc) {
+      if (curr.nodeType === 1 /* Node.ELEMENT_NODE */) {
+        const handlers = (curr as any)[propKey] as Set<(ev: Event) => void> | undefined;
+        if (handlers && handlers.size > 0) {
+          try {
+            Object.defineProperty(e, 'currentTarget', {
+              value: curr,
+              configurable: true,
+            });
+          } catch {
+            // Ignore if currentTarget cannot be redefined in some synthetic environments
+          }
+
+          for (const handler of Array.from(handlers)) {
+            handler(e);
+          }
+
+          (e as any).__angoraHandled = true;
+          if (e.cancelBubble) {
+            break;
+          }
+        }
+      }
+      curr = curr.parentNode;
+    }
+  });
+}
+
 /**
- * Binds an event listener to an element with automatic Signal batching.
- * Prevents intermediate renders and DOM thrashing when handlers modify multiple signals.
+ * Binds an event listener to an element with Global Event Delegation & automatic Signal batching.
+ * For bubbling events (click, input, keydown, etc.), delegates to document root to save memory
+ * and accelerate large lists. Falls back to direct listener for non-delegable or detached nodes.
  */
 export function bindEvent(
   element: HTMLElement,
@@ -199,6 +262,43 @@ export function bindEvent(
   const batchedHandler = (event: Event) => {
     batch(() => handler(event));
   };
+
+  const globalDoc = typeof document !== 'undefined' ? document : null;
+  const ownerDoc = element.ownerDocument;
+  const doc = globalDoc || ownerDoc;
+
+  if (DELEGATED_EVENTS.has(eventName) && doc) {
+    ensureDelegatedListener(doc, eventName);
+    if (ownerDoc && ownerDoc !== doc) {
+      ensureDelegatedListener(ownerDoc, eventName);
+    }
+
+    const propKey = `__angora_ev_${eventName}`;
+    if (!(element as any)[propKey]) {
+      (element as any)[propKey] = new Set<(ev: Event) => void>();
+    }
+    const set = (element as any)[propKey] as Set<(ev: Event) => void>;
+    set.add(batchedHandler);
+
+    // Fallback for non-bubbling events or detached nodes in headless tests/fragments
+    const directFallback = (event: Event) => {
+      if ((event as any).__angoraHandled) return;
+      if (!element.isConnected || !event.bubbles) {
+        (event as any).__angoraHandled = true;
+        batchedHandler(event);
+      }
+    };
+    element.addEventListener(eventName, directFallback);
+
+    return () => {
+      set.delete(batchedHandler);
+      if (set.size === 0) {
+        delete (element as any)[propKey];
+      }
+      element.removeEventListener(eventName, directFallback);
+    };
+  }
+
   element.addEventListener(eventName, batchedHandler);
   return () => {
     element.removeEventListener(eventName, batchedHandler);
