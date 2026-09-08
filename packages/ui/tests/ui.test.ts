@@ -198,6 +198,33 @@ describe('@angora-js/ui - Angular-style UI Components & Directives', () => {
       menu.handleKeyDown(new (window as any).KeyboardEvent('keydown', { key: 'Escape' }));
       expect(menu.open()).toBe(false);
     });
+
+    test('should resolve forwardRef to AngoraMenuItemComponent without TDZ error', () => {
+      const def = (AngoraMenuComponent as any).ɵcmp;
+      expect(def).toBeDefined();
+      expect(def.imports).toBeDefined();
+
+      const resolved = (AngoraMenuComponent as any).ɵcmp?.imports;
+      expect(resolved).toBeDefined();
+
+      const { getComponentImports } = require('@angora-js/core');
+      const imports = getComponentImports(AngoraMenuComponent);
+      expect(imports).toContain(AngoraMenuItemComponent);
+    });
+
+    test('should render menu item and emit itemClick', () => {
+      const fixture = renderComponent(AngoraMenuItemComponent);
+      const item = fixture.componentInstance;
+      let clicked = false;
+      item.itemClick.subscribe(() => {
+        clicked = true;
+      });
+
+      const el = fixture.debugElement.query('.angora-menu-item');
+      expect(el).not.toBeNull();
+      el?.click();
+      expect(clicked).toBe(true);
+    });
   });
 
   describe('AngoraSelectComponent (<angora-select>)', () => {

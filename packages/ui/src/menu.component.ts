@@ -1,7 +1,8 @@
-import { Component, input, output, signal } from '@angora-js/core';
+import { Component, forwardRef, input, output, signal } from '@angora-js/core';
 
 @Component({
   selector: 'angora-menu',
+  imports: [forwardRef(() => AngoraMenuItemComponent)],
   template: `
     <div class="angora-menu-container">
       <div

@@ -20,6 +20,24 @@ describe('@angora-js/compiler - Template Imports & Standalone Verification', () 
     expect(diags).toHaveLength(0);
   });
 
+  it('should pass validation when component is imported with forwardRef wrapper', () => {
+    const template = `
+      <angora-menu>
+        <angora-menu-item>Item</angora-menu-item>
+      </angora-menu>
+    `;
+    const ast = parseTemplate(template);
+    const diags = verifyTemplateImports(ast, {
+      className: 'MenuDemoComponent',
+      imports: [
+        'forwardRef(() => AngoraMenuComponent)',
+        'forwardRef(() => AngoraMenuItemComponent)',
+      ],
+    });
+
+    expect(diags).toHaveLength(0);
+  });
+
   it('should detect NG8001 when a custom element is used without importing it', () => {
     const template = `
       <div class="wrapper">

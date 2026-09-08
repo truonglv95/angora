@@ -475,7 +475,7 @@ export function validateFrameworkSyntax(componentFiles: string[]): AngoraDiagnos
     const content = fs.readFileSync(file, 'utf-8');
 
     const tmplMatch = content.match(/template\s*:\s*[`'"]([\s\S]*?)[`'"]/);
-    const impMatch = content.match(/imports\s*:\s*\[([\s\S]*?)\]/);
+    const impMatch = content.match(/imports\s*:\s*(?:\(\)\s*=>\s*)?\[([\s\S]*?)\]/);
     const clsMatch = content.match(/class\s+([a-zA-Z0-9_$]+)/);
 
     if (tmplMatch) {

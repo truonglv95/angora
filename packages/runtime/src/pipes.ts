@@ -5,6 +5,8 @@ import {
   COMPONENT_DEF,
   getComponentDef,
   getPipeDef,
+  resolveImports,
+  resolveForwardRef,
   type PipeTransform,
 } from '@angora-js/core';
 
@@ -35,20 +37,19 @@ export function resolvePipe(name: string, ctx?: any, injector?: Injector): PipeT
 
     // Check imports in component metadata
     const compDef = getComponentDef(ctx.constructor) || getComponentDef(ctx);
-    const imports = compDef?.metadata?.imports;
-    if (Array.isArray(imports)) {
-      for (const item of imports) {
-        const pipeDef = getPipeDef(item);
-        if (pipeDef && pipeDef.metadata.name.toLowerCase() === normalizedName) {
-          const pipeInstance =
-            typeof item?.transform === 'function'
-              ? item
-              : injector
-                ? injector.get(item, new item())
-                : new item();
-          instanceMap.set(normalizedName, pipeInstance);
-          return pipeInstance;
-        }
+    const imports = resolveImports(compDef?.metadata?.imports ?? compDef?.imports);
+    for (const rawItem of imports) {
+      const item = resolveForwardRef(rawItem);
+      const pipeDef = getPipeDef(item);
+      if (pipeDef && pipeDef.metadata.name.toLowerCase() === normalizedName) {
+        const pipeInstance =
+          typeof item?.transform === 'function'
+            ? item
+            : injector
+              ? injector.get(item, new item())
+              : new item();
+        instanceMap.set(normalizedName, pipeInstance);
+        return pipeInstance;
       }
     }
   }

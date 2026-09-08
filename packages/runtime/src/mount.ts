@@ -8,6 +8,9 @@ import {
   runWithDestroyRef,
   IS_VIEW_QUERY,
   isDevMode,
+  resolveImports,
+  resolveForwardRef,
+  getComponentDef,
   type DestroyRef,
 } from '@angora-js/core';
 import { getJITCompiler } from './bootstrap.ts';
@@ -37,14 +40,20 @@ export interface MountedComponentRef<T = any> {
  */
 export function findImportedComponent(ctx: any, tagName: string): any {
   if (!ctx) return undefined;
-  const def = ctx.constructor?.[COMPONENT_DEF] || ctx[COMPONENT_DEF];
-  const imports = def?.metadata?.imports;
-  if (!Array.isArray(imports)) return undefined;
+  const def =
+    ctx.constructor?.[COMPONENT_DEF] ||
+    ctx[COMPONENT_DEF] ||
+    getComponentDef(ctx.constructor) ||
+    getComponentDef(ctx);
+  const imports = resolveImports(def?.metadata?.imports ?? def?.imports);
+  if (!imports.length) return undefined;
 
   const normalizedTag = tagName.toLowerCase();
-  for (const item of imports) {
-    const itemDef = item?.[COMPONENT_DEF];
-    const selector = itemDef?.metadata?.selector?.toLowerCase();
+  for (const rawItem of imports) {
+    const item = resolveForwardRef(rawItem);
+    if (!item) continue;
+    const itemDef = item?.[COMPONENT_DEF] || item?.ɵcmp || getComponentDef(item);
+    const selector = itemDef?.metadata?.selector?.toLowerCase() || itemDef?.selector?.toLowerCase();
     if (selector === normalizedTag || item.name?.toLowerCase() === normalizedTag) {
       return item;
     }

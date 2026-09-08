@@ -39,35 +39,50 @@ export interface FactoryProvider<T> {
 
 export type Provider<T = any> = Type<T> | ValueProvider<T> | ClassProvider<T> | FactoryProvider<T>;
 
+import { resolveForwardRef } from './forward-ref.ts';
+
 let currentInjector: Injector | null = null;
 
 export class Injector {
   private records = new Map<ProviderToken<any>, any>();
+  private pendingProviders: Provider[] = [];
   public readonly parent: Injector | null;
 
   constructor(providers: Provider[] = [], parent: Injector | null = null) {
     this.parent = parent;
-    for (const provider of providers) {
+    this.pendingProviders = [...providers];
+  }
+
+  private processPending(): void {
+    if (this.pendingProviders.length === 0) return;
+    const list = this.pendingProviders;
+    this.pendingProviders = [];
+    for (const provider of list) {
       this.register(provider);
     }
   }
 
   private register<T>(provider: Provider<T>): void {
-    if (typeof provider === 'function') {
+    const p = resolveForwardRef(provider) as any;
+    if (typeof p === 'function') {
       // Type<T>
-      this.records.set(provider, { factory: () => new provider(), instance: undefined });
-    } else if ('useValue' in provider) {
-      this.records.set(provider.provide, { instance: provider.useValue });
-    } else if ('useClass' in provider) {
-      this.records.set(provider.provide, {
-        factory: () => new provider.useClass(),
+      this.records.set(p, { factory: () => new p(), instance: undefined });
+    } else if (p && 'useValue' in p) {
+      this.records.set(resolveForwardRef(p.provide), { instance: p.useValue });
+    } else if (p && 'useClass' in p) {
+      const classRef = p.useClass;
+      this.records.set(resolveForwardRef(p.provide), {
+        factory: () => {
+          const Cls = resolveForwardRef(classRef);
+          return new Cls();
+        },
         instance: undefined,
       });
-    } else if ('useFactory' in provider) {
-      this.records.set(provider.provide, {
+    } else if (p && 'useFactory' in p) {
+      this.records.set(resolveForwardRef(p.provide), {
         factory: () => {
-          const deps = (provider.deps || []).map(dep => this.get(dep));
-          return provider.useFactory(...deps);
+          const deps = (p.deps || []).map((dep: any) => this.get(resolveForwardRef(dep)));
+          return p.useFactory(...deps);
         },
         instance: undefined,
       });
@@ -75,6 +90,8 @@ export class Injector {
   }
 
   get<T>(token: ProviderToken<T>, notFoundValue?: T): T {
+    this.processPending();
+    token = resolveForwardRef(token) as ProviderToken<T>;
     if (token === Injector) {
       return this as any;
     }
@@ -171,8 +188,9 @@ export const rootInjector = new Injector();
  * const userService = inject(UserService);
  */
 export function inject<T>(token: ProviderToken<T>, notFoundValue?: T): T {
+  const resolvedToken = resolveForwardRef(token) as ProviderToken<T>;
   const injector = currentInjector || rootInjector;
-  return injector.get(token, notFoundValue);
+  return injector.get(resolvedToken, notFoundValue);
 }
 
 /**

@@ -380,6 +380,13 @@ function extractPipesFromExpression(expr: string): string[] {
   return pipes;
 }
 
+function cleanImportSymbol(imp: string): string {
+  const trimmed = imp.trim();
+  const m = trimmed.match(/forwardRef\s*\(\s*(?:\(\)\s*=>\s*)?([A-Za-z0-9_$]+)\s*\)/);
+  if (m) return m[1];
+  return trimmed;
+}
+
 /**
  * Verifies that all elements, pipes, and directives used in a component template
  * are properly declared in the component's `imports` array.
@@ -390,7 +397,8 @@ export function verifyTemplateImports(
 ): TemplateDiagnostic[] {
   const diagnostics: TemplateDiagnostic[] = [];
   const className = options.className || 'Component';
-  const imports = options.imports || [];
+  const rawImports = options.imports || [];
+  const imports = rawImports.map(cleanImportSymbol).filter(Boolean);
   const isCustomElementsSchema = options.schema === 'CUSTOM_ELEMENTS';
 
   function verifyExpressionPipes(expr: string, node: ASTNode) {

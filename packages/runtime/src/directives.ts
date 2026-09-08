@@ -6,6 +6,9 @@ import {
   ElementRef,
   effect,
   getDirectiveDef,
+  resolveImports,
+  resolveForwardRef,
+  getComponentDef,
   type DirectiveDef,
 } from '@angora-js/core';
 import { bindProp, bindClass, bindStyle, bindEvent } from './dom.ts';
@@ -111,13 +114,18 @@ export function applyMatchingDirectives(
   parentInjector: Injector = rootInjector
 ): any[] {
   if (!ctx || !element) return [];
-  const def = ctx.constructor?.[COMPONENT_DEF] || ctx[COMPONENT_DEF];
-  const imports = def?.metadata?.imports;
-  if (!Array.isArray(imports)) return [];
+  const def =
+    ctx.constructor?.[COMPONENT_DEF] ||
+    ctx[COMPONENT_DEF] ||
+    getComponentDef(ctx.constructor) ||
+    getComponentDef(ctx);
+  const imports = resolveImports(def?.metadata?.imports ?? def?.imports);
+  if (!imports.length) return [];
 
   const instances: any[] = [];
-  for (const item of imports) {
-    if (item && item[DIRECTIVE_DEF]) {
+  for (const rawItem of imports) {
+    const item = resolveForwardRef(rawItem);
+    if (item && (item[DIRECTIVE_DEF] || item.ɵdir || getDirectiveDef(item))) {
       if (matchesDirective(item, element)) {
         const instance = applyDirective(item, element, parentInjector);
         instances.push(instance);

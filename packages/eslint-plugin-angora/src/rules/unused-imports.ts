@@ -12,7 +12,7 @@ export function checkUnusedImports(sourceCode: string): LintDiagnostic[] {
   if (!compMatch) return diagnostics;
 
   const compBody = compMatch[1];
-  const importsMatch = compBody.match(/imports\s*:\s*\[([\s\S]*?)\]/);
+  const importsMatch = compBody.match(/imports\s*:\s*(?:\(\)\s*=>\s*)?\[([\s\S]*?)\]/);
   if (!importsMatch) return diagnostics;
 
   const rawImports = importsMatch[1];
@@ -29,7 +29,10 @@ export function checkUnusedImports(sourceCode: string): LintDiagnostic[] {
   const template = tmplMatch[1];
   const linesBefore = sourceCode.slice(0, importsMatch.index).split('\n').length;
 
-  for (const imp of imports) {
+  for (const rawImp of imports) {
+    const imp = rawImp
+      .replace(/forwardRef\s*\(\s*(?:\(\)\s*=>\s*)?([A-Za-z0-9_$]+)\s*\)/, '$1')
+      .trim();
     // Skip modules like CommonModule
     if (imp.endsWith('Module')) continue;
 
@@ -52,7 +55,7 @@ export function checkUnusedImports(sourceCode: string): LintDiagnostic[] {
     if (!isUsedInTemplate) {
       diagnostics.push({
         rule: 'angora/unused-imports',
-        message: `'${imp}' is included in @Component.imports but is never used in the template. Consider removing it to reduce bundle size.`,
+        message: `'${rawImp}' is included in @Component.imports but is never used in the template. Consider removing it to reduce bundle size.`,
         line: linesBefore,
         column: 1,
       });

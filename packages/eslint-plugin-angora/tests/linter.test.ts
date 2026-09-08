@@ -59,6 +59,21 @@ export class TestComponent {}
     expect(diags[0].message).toContain('UnusedCardComponent');
   });
 
+  test('should handle forwardRef and thunk imports in @Component.imports', () => {
+    const code = `
+import { Component, forwardRef } from '@angora-js/core';
+
+@Component({
+  selector: 'app-test',
+  imports: () => [forwardRef(() => UsedCardComponent)],
+  template: \`<div><used-card></used-card></div>\`,
+})
+export class TestComponent {}
+`;
+    const diags = checkUnusedImports(code);
+    expect(diags.length).toBe(0);
+  });
+
   test('should detect unsafe effect() created inside component method without injector', () => {
     const code = `
 import { Component, effect } from '@angora-js/core';

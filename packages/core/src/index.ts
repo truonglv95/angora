@@ -11,3 +11,4 @@ export * from './directive.ts';
 export * from './linked-signal.ts';
 export * from './store.ts';
 export * from './environment.ts';
+export * from './forward-ref.ts';

@@ -139,7 +139,7 @@ export interface TransformOptions {
 export function transformComponent(sourceCode: string, options?: TransformOptions): string {
   if (options?.strictImports) {
     const tmplMatch = sourceCode.match(/template\s*:\s*[`'"]([\s\S]*?)[`'"]/);
-    const impMatch = sourceCode.match(/imports\s*:\s*\[([\s\S]*?)\]/);
+    const impMatch = sourceCode.match(/imports\s*:\s*(?:\(\)\s*=>\s*)?\[([\s\S]*?)\]/);
     const clsMatch = sourceCode.match(/class\s+([a-zA-Z0-9_$]+)/);
     if (tmplMatch) {
       const ast = parseTemplate(tmplMatch[1]);

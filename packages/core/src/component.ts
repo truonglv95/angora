@@ -1,5 +1,6 @@
 import type { Provider } from './di.ts';
 import { ɵcmp, COMPONENT_DEF } from './defs.ts';
+import { resolveImports } from './forward-ref.ts';
 export { ɵcmp, COMPONENT_DEF };
 
 export const ViewEncapsulation = {
@@ -15,10 +16,12 @@ function toKebabCase(str: string): string {
     .replace(/^-/, '');
 }
 
+export type ComponentImports = any[] | (() => any[]);
+
 export interface ComponentMetadata {
   selector?: string;
   template: string;
-  imports?: any[];
+  imports?: ComponentImports;
   styles?: string[];
   encapsulation?: ViewEncapsulation;
   providers?: Provider[];
@@ -26,7 +29,7 @@ export interface ComponentMetadata {
 
 export interface ComponentDef<T = any> {
   selector: string;
-  imports?: any[];
+  imports?: ComponentImports;
   styles?: string[];
   scopeId?: string;
   render?: (ctx: any, injector: any) => Node[];
@@ -79,10 +82,19 @@ export function getComponentDef<T>(target: any): ComponentDef<T> | undefined {
   return target?.ɵcmp ?? target?.[COMPONENT_DEF];
 }
 
+/**
+ * Returns the fully resolved array of imported components, directives, and pipes
+ * for a component class or instance, unwrapping any thunk functions and forwardRef calls.
+ */
+export function getComponentImports(target: any): any[] {
+  const def = getComponentDef(target);
+  return resolveImports(def?.imports ?? def?.metadata?.imports);
+}
+
 export interface FunctionalComponentOptions<T = any> {
   selector?: string;
   template: string;
-  imports?: any[];
+  imports?: ComponentImports;
   styles?: string[];
   providers?: Provider[];
   setup?: (ctx: any) => T | void;
