@@ -346,4 +346,96 @@ describe('@angora-js/runtime - Fine-grained DOM Operations', () => {
 
     document.body.removeChild(parent);
   });
+
+  test('should perform non-destructive in-place hydration on existing DOM', () => {
+    const container = document.createElement('div');
+    container.id = 'app';
+    const existingElement = document.createElement('div');
+    existingElement.className = 'hydrated-box';
+    const textNode = document.createTextNode('SSR Count: 5');
+    existingElement.appendChild(textNode);
+    container.appendChild(existingElement);
+    document.body.appendChild(container);
+
+    @Component({
+      selector: 'hydrate-app',
+      template: '<div class="hydrated-box">SSR Count: 5</div>',
+    })
+    class HydrateApp {}
+
+    // Mock AOT render function that binds rootNode if provided
+    (HydrateApp as any).ɵcmp.render = (ctx: any, inj: any, rootNode?: Node) => {
+      const el = rootNode && rootNode.nodeType === 1 ? rootNode : document.createElement('div');
+      return [el];
+    };
+
+    const app = bootstrapApplication(HydrateApp, container, { hydrate: true });
+    expect(app).toBeDefined();
+
+    // Verify the existing DOM node was preserved in-place, NOT wiped or replaced
+    expect(container.firstElementChild).toBe(existingElement);
+    expect(container.contains(existingElement)).toBe(true);
+
+    document.body.removeChild(container);
+  });
+
+  test('should support multi-slot content projection via selector matching', () => {
+    const hostElement = document.createElement('card-component');
+    document.body.appendChild(hostElement);
+
+    @Component({
+      selector: 'card-component',
+      template: `
+        <div class="card">
+          <header><!--angora:slot--></header>
+          <main><!--angora:slot--></main>
+        </div>
+      `,
+    })
+    class CardComponent {}
+
+    (CardComponent as any).ɵcmp.render = (ctx: any, inj: any) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      const header = document.createElement('header');
+      const main = document.createElement('main');
+      card.appendChild(header);
+      card.appendChild(main);
+
+      // Project named slot
+      if (typeof ctx.__projectedNodes === 'function') {
+        const headerNodes = ctx.__projectedNodes('[card-header]');
+        for (const n of headerNodes) header.appendChild(n);
+      }
+      // Project default slot
+      if (typeof ctx.__projectedNodes === 'function') {
+        const defaultNodes = ctx.__projectedNodes();
+        for (const n of defaultNodes) main.appendChild(n);
+      }
+
+      return [card];
+    };
+
+    const headerEl = document.createElement('h2');
+    headerEl.setAttribute('card-header', '');
+    headerEl.textContent = 'Card Title';
+
+    const bodyEl = document.createElement('p');
+    bodyEl.textContent = 'Card Body Content';
+
+    const { mountComponent } = require('../src/mount.ts');
+    mountComponent(CardComponent, hostElement, {}, undefined, {
+      projectedNodes: () => [headerEl, bodyEl],
+    });
+
+    const headerContainer = hostElement.querySelector('header');
+    const mainContainer = hostElement.querySelector('main');
+
+    expect(headerContainer?.contains(headerEl)).toBe(true);
+    expect(headerContainer?.textContent).toBe('Card Title');
+    expect(mainContainer?.contains(bodyEl)).toBe(true);
+    expect(mainContainer?.textContent).toBe('Card Body Content');
+
+    document.body.removeChild(hostElement);
+  });
 });

@@ -6,6 +6,7 @@ pub mod constants;
 pub mod css;
 pub mod lsp;
 pub mod parser;
+pub mod ssr_codegen;
 pub mod tcb;
 pub mod transform;
 
@@ -17,11 +18,12 @@ pub use lsp::{
     LspTypeDefInfo, LspTypeMemberInfo,
 };
 pub use parser::parse_template;
+pub use ssr_codegen::compile_ssr_template;
 pub use tcb::{
     generate_tcb_from_source, generate_tcb_from_source_with_imports, generate_type_check_block,
     generate_type_check_block_with_imports, SourceMapping, TcbResult,
 };
-pub use transform::transform_component;
+pub use transform::{transform_component, transform_component_with_path};
 
 use oxc_allocator::Allocator;
 use oxc_parser::Parser;
@@ -329,5 +331,57 @@ mod tests {
         assert!(!imports_line.contains("Component"));
         assert!(!imports_line.contains("signal"));
         assert!(!result.contains("@Component"));
+    }
+
+    #[test]
+    fn test_rust_ssr_codegen_pure_string() {
+        let template = r#"
+            <div class="user-card" [class.active]="isActive()">
+                <h2>{{ title() }}</h2>
+                @if (showDetails()) {
+                    <p>{{ details() }}</p>
+                }
+                @for (item of items(); track item.id) {
+                    <span>{{ item.name }}</span>
+                }
+            </div>
+        "#;
+        let ast = parse_template(template);
+        let ssr_code = compile_ssr_template(&ast, Some("_angora-user-card"));
+
+        assert!(ssr_code.contains("function __angora_ssr_render__(ctx, injector)"));
+        assert!(ssr_code.contains("<div"));
+        assert!(ssr_code.contains("_angora-user-card=\"\""));
+        assert!(ssr_code.contains("<!--t-->"));
+        assert!(ssr_code.contains("<!--angora:if-->"));
+        assert!(ssr_code.contains("<!--/angora:if-->"));
+        assert!(ssr_code.contains("<!--angora:for-->"));
+        assert!(ssr_code.contains("<!--/angora:for-->"));
+        assert!(ssr_code.contains("return __out.join('');"));
+    }
+
+    #[test]
+    fn test_rust_multi_slot_content_projection() {
+        let template = r#"
+            <div class="card">
+                <header><ng-content select="[card-header]"></ng-content></header>
+                <main><ng-content></ng-content></main>
+            </div>
+        "#;
+        let ast = parse_template(template);
+        let code = codegen::compile_template(&ast);
+
+        assert!(code.contains("__projectedNodes('[card-header]')"));
+        assert!(code.contains("__projectedNodes()"));
+    }
+
+    #[test]
+    fn test_rust_in_place_hydration_root_node() {
+        let template = r#"<div id="app"><span>Hello</span></div>"#;
+        let ast = parse_template(template);
+        let code = codegen::compile_template(&ast);
+
+        assert!(code.contains("__angora_render__(ctx, injector, rootNode)"));
+        assert!(code.contains("(rootNode && rootNode.nodeType === 1) ? rootNode :"));
     }
 }

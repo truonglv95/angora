@@ -1,4 +1,4 @@
-use angora_compiler::{compile_template, parse_template, transform_component, AngoraCompiler};
+use angora_compiler::{compile_template, parse_template, AngoraCompiler};
 use oxc_allocator::Allocator;
 use std::env;
 use std::fs;
@@ -289,8 +289,32 @@ fn main() {
         process::exit(0);
     }
 
+    let compile_ssr_mode = args.iter().any(|a| a == "--compile-ssr");
+    if compile_ssr_mode {
+        let ast = if source.trim().starts_with('[') {
+            serde_json::from_str::<Vec<angora_compiler::TemplateNode>>(&source)
+                .unwrap_or_else(|_| parse_template(&source))
+        } else {
+            parse_template(&source)
+        };
+
+        let scope_id = args
+            .windows(2)
+            .find(|w| w[0] == "--scope-id")
+            .map(|w| w[1].as_str());
+
+        let ssr_fn = angora_compiler::compile_ssr_template(&ast, scope_id);
+        print!("{}", ssr_fn);
+        process::exit(0);
+    }
+
     if transform_mode {
-        match transform_component(&source) {
+        let fpath = if file_path == "-" {
+            None
+        } else {
+            Some(file_path.as_str())
+        };
+        match angora_compiler::transform_component_with_path(&source, fpath) {
             Ok(transformed) => {
                 print!("{}", transformed);
                 process::exit(0);

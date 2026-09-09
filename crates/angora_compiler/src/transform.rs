@@ -218,9 +218,24 @@ fn matches_candidate(
     false
 }
 
+fn resolve_file_content(path_str: &str, file_path: Option<&str>) -> Option<String> {
+    let resolved = if let Some(base) = file_path {
+        let p = std::path::Path::new(base);
+        if let Some(parent) = p.parent() {
+            parent.join(path_str)
+        } else {
+            std::path::PathBuf::from(path_str)
+        }
+    } else {
+        std::path::PathBuf::from(path_str)
+    };
+    std::fs::read_to_string(&resolved).ok()
+}
+
 fn extract_entity_metadata<'a>(
     class: &mut oxc_ast::ast::Class<'a>,
     source: &str,
+    file_path: Option<&str>,
 ) -> Option<TransformedEntity> {
     let class_name = class
         .id
@@ -296,12 +311,83 @@ fn extract_entity_metadata<'a>(
                                                 }
                                                 _ => {}
                                             },
+                                            Some("templateUrl") => {
+                                                let url_opt = match &p.value {
+                                                    oxc_ast::ast::Expression::StringLiteral(
+                                                        lit,
+                                                    ) => Some(lit.value.to_string()),
+                                                    oxc_ast::ast::Expression::TemplateLiteral(
+                                                        lit,
+                                                    ) => Some(
+                                                        lit.quasis
+                                                            .iter()
+                                                            .map(|q| q.value.raw.as_str())
+                                                            .collect::<String>(),
+                                                    ),
+                                                    _ => None,
+                                                };
+                                                if let Some(url) = url_opt {
+                                                    if let Some(content) =
+                                                        resolve_file_content(&url, file_path)
+                                                    {
+                                                        template = Some(content);
+                                                    }
+                                                }
+                                            }
                                             Some("imports") => {
                                                 let span = p.value.span();
                                                 imports_str = Some(
                                                     source[span.start as usize..span.end as usize]
                                                         .to_string(),
                                                 );
+                                            }
+                                            Some("styleUrl") => {
+                                                let url_opt = match &p.value {
+                                                    oxc_ast::ast::Expression::StringLiteral(
+                                                        lit,
+                                                    ) => Some(lit.value.to_string()),
+                                                    oxc_ast::ast::Expression::TemplateLiteral(
+                                                        lit,
+                                                    ) => Some(
+                                                        lit.quasis
+                                                            .iter()
+                                                            .map(|q| q.value.raw.as_str())
+                                                            .collect::<String>(),
+                                                    ),
+                                                    _ => None,
+                                                };
+                                                if let Some(url) = url_opt {
+                                                    if let Some(content) =
+                                                        resolve_file_content(&url, file_path)
+                                                    {
+                                                        styles_raw.push(content);
+                                                    }
+                                                }
+                                            }
+                                            Some("styleUrls") => {
+                                                if let oxc_ast::ast::Expression::ArrayExpression(
+                                                    arr,
+                                                ) = &p.value
+                                                {
+                                                    for elem in &arr.elements {
+                                                        if let Some(expr) = elem.as_expression() {
+                                                            let url_opt = match expr {
+                                                                oxc_ast::ast::Expression::StringLiteral(lit) => Some(lit.value.to_string()),
+                                                                oxc_ast::ast::Expression::TemplateLiteral(lit) => Some(lit.quasis.iter().map(|q| q.value.raw.as_str()).collect::<String>()),
+                                                                _ => None,
+                                                            };
+                                                            if let Some(url) = url_opt {
+                                                                if let Some(content) =
+                                                                    resolve_file_content(
+                                                                        &url, file_path,
+                                                                    )
+                                                                {
+                                                                    styles_raw.push(content);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                             Some("styles") => {
                                                 if let oxc_ast::ast::Expression::ArrayExpression(
@@ -519,6 +605,14 @@ fn extract_entity_metadata<'a>(
 /// Transforms an Angora source file by compiling components, directives, pipes, and injectables
 /// into pure zero-decorator TypeScript/JavaScript code using pure OXC AST.
 pub fn transform_component(source: &str) -> Result<String, String> {
+    transform_component_with_path(source, None)
+}
+
+/// Transforms an Angora source file with a specified base file path to resolve external templateUrl and styleUrls.
+pub fn transform_component_with_path(
+    source: &str,
+    file_path: Option<&str>,
+) -> Result<String, String> {
     // Fast path: if no Angora decorator token at all, skip parsing
     let has_angora_decorator = source.contains("@Component")
         || source.contains("@Directive")
@@ -631,7 +725,7 @@ pub fn transform_component(source: &str) -> Result<String, String> {
         };
 
         if let Some(class) = class_opt {
-            if let Some(entity) = extract_entity_metadata(class, source) {
+            if let Some(entity) = extract_entity_metadata(class, source, file_path) {
                 let static_snippet = match &entity {
                     TransformedEntity::Component(comp) => {
                         needs_runtime = true;
@@ -652,6 +746,10 @@ pub fn transform_component(source: &str) -> Result<String, String> {
 
                         let template_ast = parse_template(&comp.template);
                         let render_fn_body = crate::codegen::compile_template_with_scope(
+                            &template_ast,
+                            scope_id.as_deref(),
+                        );
+                        let ssr_render_fn_body = crate::ssr_codegen::compile_ssr_template(
                             &template_ast,
                             scope_id.as_deref(),
                         );
@@ -717,6 +815,7 @@ pub fn transform_component(source: &str) -> Result<String, String> {
     styles: {styles},
     scopeId: {sid_val},
     render: {render},
+    ssrRender: {ssr_render},
     type: {cn},
     metadata: {{
       selector: '{sel}',
@@ -732,6 +831,7 @@ pub fn transform_component(source: &str) -> Result<String, String> {
                             styles = styles_str,
                             sid_val = sid_val,
                             render = render_fn_body,
+                            ssr_render = ssr_render_fn_body,
                             scope_props = scope_props
                         )
                     }
@@ -850,7 +950,7 @@ pub fn transform_component(source: &str) -> Result<String, String> {
 
     let mut prefix_imports = String::new();
     if needs_runtime {
-        prefix_imports.push_str("import { createElement, createText, createComment, bindText, bindProp, bindClass, bindStyle, bindTwoWay, bindEvent, createIf, createFor, createSwitch, createDefer, applyPipe, mountComponent, injectComponentStyles, template, applyMatchingDirectives } from '@angora-js/runtime';\n");
+        prefix_imports.push_str("import { createElement, createText, createComment, bindText, bindProp, bindClass, bindStyle, bindTwoWay, bindEvent, createIf, createFor, createSwitch, createDefer, applyPipe, mountComponent, injectComponentStyles, template, applyMatchingDirectives, findImportedComponent, COMPONENT_DEF } from '@angora-js/runtime';\n");
     }
 
     Ok(format!(

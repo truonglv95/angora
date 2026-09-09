@@ -66,7 +66,9 @@ export function hydrateApplication<T>(
   ];
 
   const app = bootstrapApplication(componentType, container, {
+    ...options,
     providers: clientProviders,
+    hydrate: true,
   });
 
   if (options.replayEvents !== false) {

@@ -21,7 +21,7 @@ enum BindingKind {
     ForBlock(ForBlockNode),
     SwitchBlock(SwitchBlockNode),
     DeferBlock(DeferBlockNode),
-    Slot,
+    Slot(Option<String>),
     CustomComponent(ElementNode),
 }
 
@@ -36,6 +36,7 @@ pub struct CodeGenerator {
     pub templates: Vec<(String, String)>,
     statements: Vec<String>,
     pub scope_id: Option<String>,
+    has_bound_root_element: bool,
 }
 
 impl CodeGenerator {
@@ -46,6 +47,7 @@ impl CodeGenerator {
             templates: Vec::new(),
             statements: Vec::new(),
             scope_id: None,
+            has_bound_root_element: false,
         }
     }
 
@@ -56,6 +58,7 @@ impl CodeGenerator {
             templates: Vec::new(),
             statements: Vec::new(),
             scope_id,
+            has_bound_root_element: false,
         }
     }
 
@@ -70,6 +73,7 @@ impl CodeGenerator {
         self.templates.clear();
         self.id_counter = 0;
         self.tmpl_counter = 0;
+        self.has_bound_root_element = false;
 
         let root_nodes_var = self.next_id("roots");
         self.statements
@@ -87,7 +91,7 @@ impl CodeGenerator {
         let body = self.statements.join("\n  ");
         if self.templates.is_empty() {
             format!(
-                "function __angora_render__(ctx, injector) {{\n  {}\n}}",
+                "function __angora_render__(ctx, injector, rootNode) {{\n  {}\n}}",
                 body
             )
         } else {
@@ -100,7 +104,7 @@ impl CodeGenerator {
                 ));
             }
             format!(
-                "(() => {{\n  {}\n  return function __angora_render__(ctx, injector) {{\n    {}\n  }};\n}})()",
+                "(() => {{\n  {}\n  return function __angora_render__(ctx, injector, rootNode) {{\n    {}\n  }};\n}})()",
                 tmpl_defs.join("\n  "),
                 body.replace('\n', "\n  ")
             )
@@ -120,7 +124,12 @@ impl CodeGenerator {
         match node {
             TemplateNode::Element(el) => {
                 if el.name == "ng-content" {
-                    Some(self.generate_slot(parent_var))
+                    let select = el
+                        .attributes
+                        .iter()
+                        .find(|a| a.name == "select")
+                        .map(|a| a.value.as_str());
+                    Some(self.generate_slot(parent_var, select))
                 } else if self.is_custom_component(&el.name) {
                     Some(self.generate_custom_component(el, parent_var, scope_vars))
                 } else {
@@ -217,10 +226,15 @@ impl CodeGenerator {
             match child {
                 TemplateNode::Element(child_el) => {
                     if child_el.name == "ng-content" {
+                        let select = child_el
+                            .attributes
+                            .iter()
+                            .find(|a| a.name == "select")
+                            .map(|a| a.value.clone());
                         html.push_str("<!--angora:slot-->");
                         bindings.push(NodeBinding {
                             path: child_path,
-                            kind: BindingKind::Slot,
+                            kind: BindingKind::Slot(select),
                         });
                     } else if self.is_custom_component(&child_el.name) {
                         html.push('<');
@@ -313,8 +327,16 @@ impl CodeGenerator {
         self.templates.push((tmpl_var.clone(), html));
 
         let root_var = self.next_id("el");
-        self.statements
-            .push(format!("const {} = {}();", root_var, tmpl_var));
+        if parent_var.is_none() && !self.has_bound_root_element {
+            self.has_bound_root_element = true;
+            self.statements.push(format!(
+                "const {} = (rootNode && rootNode.nodeType === 1) ? rootNode : {}();",
+                root_var, tmpl_var
+            ));
+        } else {
+            self.statements
+                .push(format!("const {} = {}();", root_var, tmpl_var));
+        }
 
         if let Some(pv) = parent_var {
             self.statements
@@ -591,10 +613,14 @@ impl CodeGenerator {
                         placeholder_minimum
                     ));
                 }
-                BindingKind::Slot => {
+                BindingKind::Slot(select) => {
+                    let select_arg = match select {
+                        Some(ref s) => format!("'{}'", s.replace('\'', "\\'")),
+                        None => String::new(),
+                    };
                     self.statements.push(format!(
-                        "if (typeof ctx.__projectedNodes === 'function') {{\n    const _projNodes = ctx.__projectedNodes();\n    for (const _n of _projNodes) {{\n      {}.parentNode.insertBefore(_n, {});\n    }}\n  }}",
-                        target_var, target_var
+                        "if (typeof ctx.__projectedNodes === 'function') {{\n    const _projNodes = ctx.__projectedNodes({});\n    for (const _n of _projNodes) {{\n      {}.parentNode.insertBefore(_n, {});\n    }}\n  }}",
+                        select_arg, target_var, target_var
                     ));
                 }
                 BindingKind::CustomComponent(child_el) => {
@@ -645,7 +671,7 @@ impl CodeGenerator {
         root_var
     }
 
-    fn generate_slot(&mut self, parent_var: Option<&str>) -> String {
+    fn generate_slot(&mut self, parent_var: Option<&str>, select: Option<&str>) -> String {
         let anchor_var = self.next_id("slot");
         self.statements.push(format!(
             "const {} = createComment('angora:slot');",
@@ -655,9 +681,13 @@ impl CodeGenerator {
             Some(pv) => format!("{}.appendChild(_n);", pv),
             None => String::new(),
         };
+        let select_arg = match select {
+            Some(s) => format!("'{}'", s.replace('\'', "\\'")),
+            None => String::new(),
+        };
         self.statements.push(format!(
-            "if (typeof ctx.__projectedNodes === 'function') {{\n    const _projNodes = ctx.__projectedNodes();\n    for (const _n of _projNodes) {{\n      {}\n    }}\n  }}",
-            parent_append
+            "if (typeof ctx.__projectedNodes === 'function') {{\n    const _projNodes = ctx.__projectedNodes({});\n    for (const _n of _projNodes) {{\n      {}\n    }}\n  }}",
+            select_arg, parent_append
         ));
         if let Some(pv) = parent_var {
             self.statements

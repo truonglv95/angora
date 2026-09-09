@@ -51,6 +51,17 @@ export function createIf(
     if (activeBranchIndex === previousActiveBranch) {
       return;
     }
+    if (previousActiveBranch === -1 && anchor.parentNode) {
+      let next = anchor.nextSibling;
+      while (next && !(next.nodeType === 8 && (next as Comment).nodeValue === '/angora:if')) {
+        const toRemove = next;
+        next = next.nextSibling;
+        anchor.parentNode.removeChild(toRemove);
+      }
+      if (next && next.nodeType === 8 && (next as Comment).nodeValue === '/angora:if') {
+        anchor.parentNode.removeChild(next);
+      }
+    }
     previousActiveBranch = activeBranchIndex;
 
     cleanupNodes();
@@ -127,6 +138,17 @@ export function createSwitch<T = any>(
     if (finalIndex === previousMatchedIndex) {
       return;
     }
+    if (previousMatchedIndex === -1 && anchor.parentNode) {
+      let next = anchor.nextSibling;
+      while (next && !(next.nodeType === 8 && (next as Comment).nodeValue === '/angora:switch')) {
+        const toRemove = next;
+        next = next.nextSibling;
+        anchor.parentNode.removeChild(toRemove);
+      }
+      if (next && next.nodeType === 8 && (next as Comment).nodeValue === '/angora:switch') {
+        anchor.parentNode.removeChild(next);
+      }
+    }
     previousMatchedIndex = finalIndex;
 
     cleanupNodes();
@@ -169,6 +191,7 @@ export function createFor<T>(
 ): () => void {
   let previousRecords = new Map<any, ItemRecord<T>>();
   let emptyNodes: Node[] = [];
+  let isFirstRun = true;
 
   const cleanupEmpty = () => {
     for (const node of emptyNodes) {
@@ -195,6 +218,19 @@ export function createFor<T>(
     const list = listGetter() || [];
     const parent = anchor.parentNode;
     if (!parent) return;
+
+    if (isFirstRun) {
+      isFirstRun = false;
+      let next = anchor.nextSibling;
+      while (next && !(next.nodeType === 8 && (next as Comment).nodeValue === '/angora:for')) {
+        const toRemove = next;
+        next = next.nextSibling;
+        parent.removeChild(toRemove);
+      }
+      if (next && next.nodeType === 8 && (next as Comment).nodeValue === '/angora:for') {
+        parent.removeChild(next);
+      }
+    }
 
     if (list.length === 0) {
       cleanupAll();

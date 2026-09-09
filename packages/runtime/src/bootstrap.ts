@@ -34,6 +34,7 @@ export function getRuntimeScope() {
 export interface BootstrapOptions {
   providers?: any[];
   devtools?: boolean | { mode?: 'full' | 'profiling' | 'disabled' };
+  hydrate?: boolean;
 }
 
 export type JITCompiler = (
@@ -148,11 +149,18 @@ export function bootstrapApplication<T>(
   );
 
   let mountedNodes: Node[] = [];
+  const isHydrating = Boolean(options?.hydrate && targetElement.hasChildNodes());
+  const rootNode = isHydrating
+    ? targetElement.firstElementChild || targetElement.firstChild || undefined
+    : undefined;
+
   if (typeof renderFn === 'function') {
-    mountedNodes = renderFn(instance, renderInjector);
-    targetElement.innerHTML = '';
-    for (const node of mountedNodes) {
-      targetElement.appendChild(node);
+    mountedNodes = renderFn(instance, renderInjector, rootNode);
+    if (!isHydrating) {
+      targetElement.innerHTML = '';
+      for (const node of mountedNodes) {
+        targetElement.appendChild(node);
+      }
     }
   } else {
     // If running in development without AOT or JIT

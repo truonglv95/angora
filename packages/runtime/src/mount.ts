@@ -131,7 +131,34 @@ export function mountComponent<T = any>(
 
   // Attach projected nodes getter if present
   if (options.projectedNodes) {
-    (instance as any).__projectedNodes = options.projectedNodes;
+    let cachedNodes: Node[] | null = null;
+    const getNodes = () => {
+      if (!cachedNodes) {
+        cachedNodes = options.projectedNodes!();
+      }
+      return cachedNodes;
+    };
+    (instance as any).__projectedNodes = (selector?: string) => {
+      const allNodes = getNodes();
+      if (!selector || selector === '*') {
+        return allNodes.filter(n => {
+          if (n.nodeType === 1 /* ELEMENT_NODE */) {
+            return !(n as HTMLElement).hasAttribute('data-angora-projected');
+          }
+          return true;
+        });
+      }
+      return allNodes.filter(n => {
+        if (n.nodeType === 1 /* ELEMENT_NODE */) {
+          const el = n as HTMLElement;
+          if (el.matches && el.matches(selector)) {
+            el.setAttribute('data-angora-projected', '');
+            return true;
+          }
+        }
+        return false;
+      });
+    };
   }
 
   // 3. Bind reactive inputs
@@ -254,10 +281,16 @@ export function mountComponent<T = any>(
 
   let mountedChildNodes: Node[] = [];
   if (typeof renderFn === 'function') {
-    const childNodes: Node[] = renderFn(instance, renderInjector);
+    const hasInitialChildren = hostElement.hasChildNodes();
+    const rootChildNode = hasInitialChildren
+      ? hostElement.firstElementChild || hostElement.firstChild || undefined
+      : undefined;
+    const childNodes: Node[] = renderFn(instance, renderInjector, rootChildNode);
     mountedChildNodes = childNodes;
-    for (const node of childNodes) {
-      hostElement.appendChild(node);
+    if (!hasInitialChildren) {
+      for (const node of childNodes) {
+        hostElement.appendChild(node);
+      }
     }
   }
 
