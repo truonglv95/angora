@@ -294,4 +294,20 @@ describe('@angora-js/compiler - Template Parser', () => {
     expect(btn.children[0].type).toBe('text');
     expect(btn.children[0].value).toBe('× Delete <Item> ▾');
   });
+
+  test('should transform component with shorthand template string and auto-selector', () => {
+    const source = `
+      import { Component, signal } from '@angora-js/core';
+
+      @Component('<button (click)="count.inc()">{{ count }}</button>')
+      export class QuickCounter {
+        count = signal(0);
+      }
+    `;
+
+    const transformed = transformComponent(source);
+    expect(transformed).toContain('selector: "quick-counter"');
+    expect(transformed).toContain('static ɵcmp');
+    expect(transformed).not.toContain('@Component');
+  });
 });

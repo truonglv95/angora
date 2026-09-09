@@ -384,4 +384,59 @@ mod tests {
         assert!(code.contains("__angora_render__(ctx, injector, rootNode)"));
         assert!(code.contains("(rootNode && rootNode.nodeType === 1) ? rootNode :"));
     }
+
+    #[test]
+    fn test_rust_component_transform_shorthands_and_conventions() {
+        // 1. Shorthand template string in @Component
+        let source1 = r#"
+            import { Component, signal } from '@angora-js/core';
+
+            @Component('<button (click)="count.inc()">{{ count }}</button>')
+            export class Counter {
+                count = signal(0);
+            }
+        "#;
+        let result1 = transform_component(source1).expect("Transform shorthand string failed");
+        assert!(result1.contains("static ɵcmp"));
+        assert!(result1.contains("selector: \"counter\""));
+        assert!(!result1.contains("@Component"));
+
+        // 2. Tagged template syntax: @Component`<h1>Tagged</h1>`
+        let source2 = r#"
+            import { Component } from '@angora-js/core';
+
+            @Component`<h1>Tagged</h1>`
+            export class TaggedComponent {}
+        "#;
+        let result2 = transform_component(source2).expect("Transform tagged template failed");
+        assert!(result2.contains("static ɵcmp"));
+        assert!(result2.contains("selector: \"tagged-component\""));
+        assert!(!result2.contains("@Component"));
+
+        // 3. Convention-based discovery: @Component() with file_path
+        let temp_dir = std::env::temp_dir().join(format!("angora_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let ts_file = temp_dir.join("profile.component.ts");
+        let html_file = temp_dir.join("profile.component.html");
+        let css_file = temp_dir.join("profile.component.css");
+
+        std::fs::write(&html_file, "<div class=\"profile\"><h1>Profile</h1></div>").unwrap();
+        std::fs::write(&css_file, ".profile { color: red; }").unwrap();
+
+        let source3 = r#"
+            import { Component } from '@angora-js/core';
+
+            @Component()
+            export class ProfileComponent {}
+        "#;
+        let result3 = transform_component_with_path(source3, Some(ts_file.to_str().unwrap())).expect("Transform convention failed");
+        assert!(result3.contains("static ɵcmp"));
+        assert!(result3.contains("Profile</h1>"));
+        assert!(result3.contains("color: red"));
+        assert!(!result3.contains("@Component"));
+
+        // Clean up temp dir
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }
+

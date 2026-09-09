@@ -90,6 +90,8 @@ fn is_angora_internal(name: &str) -> bool {
             | "DirectiveDef"
             | "PipeDef"
             | "TemplateNode"
+            | "html"
+            | "css"
     )
 }
 
@@ -232,6 +234,60 @@ fn resolve_file_content(path_str: &str, file_path: Option<&str>) -> Option<Strin
     std::fs::read_to_string(&resolved).ok()
 }
 
+fn resolve_convention_template_and_styles(
+    class_name: &str,
+    file_path: Option<&str>,
+    template: &mut Option<String>,
+    styles_raw: &mut Vec<String>,
+) {
+    if let Some(fp) = file_path {
+        let p = std::path::Path::new(fp);
+        if let Some(parent) = p.parent() {
+            let file_stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let kebab = to_kebab_case(class_name);
+
+            // e.g. "counter.component" -> base is "counter"
+            let base_stem = if let Some(idx) = file_stem.find(".component") {
+                &file_stem[..idx]
+            } else {
+                file_stem
+            };
+
+            let tmpl_candidates = [
+                parent.join(format!("{file_stem}.html")),
+                parent.join(format!("{base_stem}.component.html")),
+                parent.join(format!("{base_stem}.html")),
+                parent.join(format!("{kebab}.component.html")),
+                parent.join(format!("{kebab}.html")),
+            ];
+            for cand in &tmpl_candidates {
+                if cand.is_file() {
+                    if let Ok(c) = std::fs::read_to_string(cand) {
+                        *template = Some(c);
+                        break;
+                    }
+                }
+            }
+
+            let style_candidates = [
+                parent.join(format!("{file_stem}.css")),
+                parent.join(format!("{base_stem}.component.css")),
+                parent.join(format!("{base_stem}.css")),
+                parent.join(format!("{kebab}.component.css")),
+                parent.join(format!("{kebab}.css")),
+            ];
+            for cand in &style_candidates {
+                if cand.is_file() {
+                    if let Ok(c) = std::fs::read_to_string(cand) {
+                        styles_raw.push(c);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn extract_entity_metadata<'a>(
     class: &mut oxc_ast::ast::Class<'a>,
     source: &str,
@@ -256,183 +312,244 @@ fn extract_entity_metadata<'a>(
 
                 match decorator_name {
                     "Component" => {
+                        let mut selector: Option<String> = None;
+                        let mut template: Option<String> = None;
+                        let mut imports_str: Option<String> = None;
+                        let mut styles_raw = Vec::new();
+
                         if let Some(arg) = call.arguments.first() {
-                            if let Some(oxc_ast::ast::Expression::ObjectExpression(obj)) =
-                                arg.as_expression()
-                            {
-                                let mut selector: Option<String> = None;
-                                let mut template: Option<String> = None;
-                                let mut imports_str: Option<String> = None;
-                                let mut styles_raw = Vec::new();
+                            match arg.as_expression() {
+                                Some(oxc_ast::ast::Expression::ObjectExpression(obj)) => {
+                                    for prop in &obj.properties {
+                                        if let oxc_ast::ast::ObjectPropertyKind::ObjectProperty(p) =
+                                            prop
+                                        {
+                                            let key_name = match &p.key {
+                                                oxc_ast::ast::PropertyKey::StaticIdentifier(
+                                                    ident,
+                                                ) => Some(ident.name.as_str()),
+                                                oxc_ast::ast::PropertyKey::Identifier(ident) => {
+                                                    Some(ident.name.as_str())
+                                                }
+                                                oxc_ast::ast::PropertyKey::StringLiteral(lit) => {
+                                                    Some(lit.value.as_str())
+                                                }
+                                                _ => None,
+                                            };
 
-                                for prop in &obj.properties {
-                                    if let oxc_ast::ast::ObjectPropertyKind::ObjectProperty(p) =
-                                        prop
-                                    {
-                                        let key_name = match &p.key {
-                                            oxc_ast::ast::PropertyKey::StaticIdentifier(ident) => {
-                                                Some(ident.name.as_str())
-                                            }
-                                            oxc_ast::ast::PropertyKey::Identifier(ident) => {
-                                                Some(ident.name.as_str())
-                                            }
-                                            oxc_ast::ast::PropertyKey::StringLiteral(lit) => {
-                                                Some(lit.value.as_str())
-                                            }
-                                            _ => None,
-                                        };
-
-                                        match key_name {
-                                            Some("selector") => match &p.value {
-                                                oxc_ast::ast::Expression::StringLiteral(lit) => {
-                                                    selector = Some(lit.value.to_string());
-                                                }
-                                                oxc_ast::ast::Expression::TemplateLiteral(lit) => {
-                                                    let s: String = lit
-                                                        .quasis
-                                                        .iter()
-                                                        .map(|q| q.value.raw.as_str())
-                                                        .collect();
-                                                    selector = Some(s);
-                                                }
-                                                _ => {}
-                                            },
-                                            Some("template") => match &p.value {
-                                                oxc_ast::ast::Expression::StringLiteral(lit) => {
-                                                    template = Some(lit.value.to_string());
-                                                }
-                                                oxc_ast::ast::Expression::TemplateLiteral(lit) => {
-                                                    let s: String = lit
-                                                        .quasis
-                                                        .iter()
-                                                        .map(|q| q.value.raw.as_str())
-                                                        .collect();
-                                                    template = Some(s);
-                                                }
-                                                _ => {}
-                                            },
-                                            Some("templateUrl") => {
-                                                let url_opt = match &p.value {
+                                            match key_name {
+                                                Some("selector") => match &p.value {
                                                     oxc_ast::ast::Expression::StringLiteral(
                                                         lit,
-                                                    ) => Some(lit.value.to_string()),
+                                                    ) => {
+                                                        selector = Some(lit.value.to_string());
+                                                    }
                                                     oxc_ast::ast::Expression::TemplateLiteral(
                                                         lit,
-                                                    ) => Some(
-                                                        lit.quasis
+                                                    ) => {
+                                                        let s: String = lit
+                                                            .quasis
                                                             .iter()
                                                             .map(|q| q.value.raw.as_str())
-                                                            .collect::<String>(),
-                                                    ),
-                                                    _ => None,
-                                                };
-                                                if let Some(url) = url_opt {
-                                                    if let Some(content) =
-                                                        resolve_file_content(&url, file_path)
-                                                    {
-                                                        template = Some(content);
+                                                            .collect();
+                                                        selector = Some(s);
                                                     }
-                                                }
-                                            }
-                                            Some("imports") => {
-                                                let span = p.value.span();
-                                                imports_str = Some(
-                                                    source[span.start as usize..span.end as usize]
-                                                        .to_string(),
-                                                );
-                                            }
-                                            Some("styleUrl") => {
-                                                let url_opt = match &p.value {
+                                                    _ => {}
+                                                },
+                                                Some("template") => match &p.value {
                                                     oxc_ast::ast::Expression::StringLiteral(
                                                         lit,
-                                                    ) => Some(lit.value.to_string()),
+                                                    ) => {
+                                                        template = Some(lit.value.to_string());
+                                                    }
                                                     oxc_ast::ast::Expression::TemplateLiteral(
                                                         lit,
-                                                    ) => Some(
-                                                        lit.quasis
+                                                    ) => {
+                                                        let s: String = lit
+                                                            .quasis
                                                             .iter()
                                                             .map(|q| q.value.raw.as_str())
-                                                            .collect::<String>(),
-                                                    ),
-                                                    _ => None,
-                                                };
-                                                if let Some(url) = url_opt {
-                                                    if let Some(content) =
-                                                        resolve_file_content(&url, file_path)
-                                                    {
-                                                        styles_raw.push(content);
+                                                            .collect();
+                                                        template = Some(s);
+                                                    }
+                                                    _ => {}
+                                                },
+                                                Some("templateUrl") => {
+                                                    let url_opt = match &p.value {
+                                                        oxc_ast::ast::Expression::StringLiteral(
+                                                            lit,
+                                                        ) => Some(lit.value.to_string()),
+                                                        oxc_ast::ast::Expression::TemplateLiteral(
+                                                            lit,
+                                                        ) => Some(
+                                                            lit.quasis
+                                                                .iter()
+                                                                .map(|q| q.value.raw.as_str())
+                                                                .collect::<String>(),
+                                                        ),
+                                                        _ => None,
+                                                    };
+                                                    if let Some(url) = url_opt {
+                                                        if let Some(content) =
+                                                            resolve_file_content(&url, file_path)
+                                                        {
+                                                            template = Some(content);
+                                                        }
                                                     }
                                                 }
-                                            }
-                                            Some("styleUrls") => {
-                                                if let oxc_ast::ast::Expression::ArrayExpression(
-                                                    arr,
-                                                ) = &p.value
-                                                {
-                                                    for elem in &arr.elements {
-                                                        if let Some(expr) = elem.as_expression() {
-                                                            let url_opt = match expr {
-                                                                oxc_ast::ast::Expression::StringLiteral(lit) => Some(lit.value.to_string()),
-                                                                oxc_ast::ast::Expression::TemplateLiteral(lit) => Some(lit.quasis.iter().map(|q| q.value.raw.as_str()).collect::<String>()),
-                                                                _ => None,
-                                                            };
-                                                            if let Some(url) = url_opt {
-                                                                if let Some(content) =
-                                                                    resolve_file_content(
-                                                                        &url, file_path,
-                                                                    )
-                                                                {
-                                                                    styles_raw.push(content);
+                                                Some("imports") => {
+                                                    let span = p.value.span();
+                                                    imports_str = Some(
+                                                        source[span.start as usize..span.end as usize]
+                                                            .to_string(),
+                                                    );
+                                                }
+                                                Some("styleUrl") => {
+                                                    let url_opt = match &p.value {
+                                                        oxc_ast::ast::Expression::StringLiteral(
+                                                            lit,
+                                                        ) => Some(lit.value.to_string()),
+                                                        oxc_ast::ast::Expression::TemplateLiteral(
+                                                            lit,
+                                                        ) => Some(
+                                                            lit.quasis
+                                                                .iter()
+                                                                .map(|q| q.value.raw.as_str())
+                                                                .collect::<String>(),
+                                                        ),
+                                                        _ => None,
+                                                    };
+                                                    if let Some(url) = url_opt {
+                                                        if let Some(content) =
+                                                            resolve_file_content(&url, file_path)
+                                                        {
+                                                            styles_raw.push(content);
+                                                        }
+                                                    }
+                                                }
+                                                Some("styleUrls") => {
+                                                    if let oxc_ast::ast::Expression::ArrayExpression(
+                                                        arr,
+                                                    ) = &p.value
+                                                    {
+                                                        for elem in &arr.elements {
+                                                            if let Some(expr) = elem.as_expression() {
+                                                                let url_opt = match expr {
+                                                                    oxc_ast::ast::Expression::StringLiteral(lit) => Some(lit.value.to_string()),
+                                                                    oxc_ast::ast::Expression::TemplateLiteral(lit) => Some(lit.quasis.iter().map(|q| q.value.raw.as_str()).collect::<String>()),
+                                                                    _ => None,
+                                                                };
+                                                                if let Some(url) = url_opt {
+                                                                    if let Some(content) =
+                                                                        resolve_file_content(
+                                                                            &url, file_path,
+                                                                        )
+                                                                    {
+                                                                        styles_raw.push(content);
+                                                                    }
                                                                 }
                                                             }
                                                         }
                                                     }
                                                 }
-                                            }
-                                            Some("styles") => {
-                                                if let oxc_ast::ast::Expression::ArrayExpression(
-                                                    arr,
-                                                ) = &p.value
-                                                {
-                                                    for elem in &arr.elements {
-                                                        if let Some(expr) = elem.as_expression() {
-                                                            match expr {
-                                                                oxc_ast::ast::Expression::StringLiteral(lit) => {
-                                                                    styles_raw.push(lit.value.to_string());
+                                                Some("styles") => {
+                                                    if let oxc_ast::ast::Expression::ArrayExpression(
+                                                        arr,
+                                                    ) = &p.value
+                                                    {
+                                                        for elem in &arr.elements {
+                                                            if let Some(expr) = elem.as_expression() {
+                                                                match expr {
+                                                                    oxc_ast::ast::Expression::StringLiteral(lit) => {
+                                                                        styles_raw.push(lit.value.to_string());
+                                                                    }
+                                                                    oxc_ast::ast::Expression::TemplateLiteral(lit) => {
+                                                                        let s: String = lit
+                                                                            .quasis
+                                                                            .iter()
+                                                                            .map(|q| q.value.raw.as_str())
+                                                                            .collect();
+                                                                        styles_raw.push(s);
+                                                                    }
+                                                                    _ => {}
                                                                 }
-                                                                oxc_ast::ast::Expression::TemplateLiteral(lit) => {
-                                                                    let s: String = lit
-                                                                        .quasis
-                                                                        .iter()
-                                                                        .map(|q| q.value.raw.as_str())
-                                                                        .collect();
-                                                                    styles_raw.push(s);
-                                                                }
-                                                                _ => {}
                                                             }
                                                         }
                                                     }
                                                 }
+                                                _ => {}
                                             }
-                                            _ => {}
                                         }
                                     }
                                 }
-
-                                let final_selector =
-                                    selector.unwrap_or_else(|| to_kebab_case(&class_name));
-                                if let Some(tmpl) = template {
-                                    entity =
-                                        Some(TransformedEntity::Component(ComponentMetadata {
-                                            class_name: class_name.clone(),
-                                            selector: final_selector,
-                                            imports_str,
-                                            styles_raw,
-                                            template: tmpl,
-                                        }));
-                                    break;
+                                Some(oxc_ast::ast::Expression::StringLiteral(lit)) => {
+                                    let val = lit.value.as_str();
+                                    if (val.ends_with(".html") || val.ends_with(".htm"))
+                                        && !val.contains('<')
+                                        && !val.contains('\n')
+                                    {
+                                        if let Some(content) = resolve_file_content(val, file_path) {
+                                            template = Some(content);
+                                        } else {
+                                            template = Some(val.to_string());
+                                        }
+                                    } else {
+                                        template = Some(val.to_string());
+                                    }
                                 }
+                                Some(oxc_ast::ast::Expression::TemplateLiteral(lit)) => {
+                                    let s: String = lit
+                                        .quasis
+                                        .iter()
+                                        .map(|q| q.value.raw.as_str())
+                                        .collect();
+                                    let val = s.as_str();
+                                    if (val.ends_with(".html") || val.ends_with(".htm"))
+                                        && !val.contains('<')
+                                        && !val.contains('\n')
+                                    {
+                                        if let Some(content) = resolve_file_content(val, file_path) {
+                                            template = Some(content);
+                                        } else {
+                                            template = Some(s);
+                                        }
+                                    } else {
+                                        template = Some(s);
+                                    }
+                                }
+                                Some(oxc_ast::ast::Expression::TaggedTemplateExpression(tagged)) => {
+                                    let s: String = tagged
+                                        .quasi
+                                        .quasis
+                                        .iter()
+                                        .map(|q| q.value.raw.as_str())
+                                        .collect();
+                                    template = Some(s);
+                                }
+                                _ => {}
                             }
+                        } else {
+                            // Shorthand @Component() with convention
+                            resolve_convention_template_and_styles(
+                                &class_name,
+                                file_path,
+                                &mut template,
+                                &mut styles_raw,
+                            );
+                        }
+
+                        let final_selector =
+                            selector.unwrap_or_else(|| to_kebab_case(&class_name));
+                        if let Some(tmpl) = template {
+                            entity =
+                                Some(TransformedEntity::Component(ComponentMetadata {
+                                    class_name: class_name.clone(),
+                                    selector: final_selector,
+                                    imports_str,
+                                    styles_raw,
+                                    template: tmpl,
+                                }));
+                            break;
                         }
                     }
                     "Directive" => {
@@ -572,6 +689,49 @@ fn extract_entity_metadata<'a>(
                         options_str: "{}".to_string(),
                     }));
                     break;
+                } else if ident.name == "Component" {
+                    let mut template: Option<String> = None;
+                    let mut styles_raw = Vec::new();
+                    resolve_convention_template_and_styles(
+                        &class_name,
+                        file_path,
+                        &mut template,
+                        &mut styles_raw,
+                    );
+                    if let Some(tmpl) = template {
+                        let final_selector = to_kebab_case(&class_name);
+                        entity = Some(TransformedEntity::Component(ComponentMetadata {
+                            class_name: class_name.clone(),
+                            selector: final_selector,
+                            imports_str: None,
+                            styles_raw,
+                            template: tmpl,
+                        }));
+                        break;
+                    }
+                }
+            }
+            oxc_ast::ast::Expression::TaggedTemplateExpression(tagged) => {
+                let tag_name = match &tagged.tag {
+                    oxc_ast::ast::Expression::Identifier(ident) => ident.name.as_str(),
+                    _ => "",
+                };
+                if tag_name == "Component" {
+                    let s: String = tagged
+                        .quasi
+                        .quasis
+                        .iter()
+                        .map(|q| q.value.raw.as_str())
+                        .collect();
+                    let final_selector = to_kebab_case(&class_name);
+                    entity = Some(TransformedEntity::Component(ComponentMetadata {
+                        class_name: class_name.clone(),
+                        selector: final_selector,
+                        imports_str: None,
+                        styles_raw: Vec::new(),
+                        template: s,
+                    }));
+                    break;
                 }
             }
             _ => {}
@@ -593,7 +753,14 @@ fn extract_entity_metadata<'a>(
             }
             oxc_ast::ast::Expression::Identifier(id) => {
                 let n = id.name.as_str();
-                n != "Injectable"
+                n != "Injectable" && n != "Component"
+            }
+            oxc_ast::ast::Expression::TaggedTemplateExpression(tagged) => {
+                if let oxc_ast::ast::Expression::Identifier(id) = &tagged.tag {
+                    let n = id.name.as_str();
+                    return n != "Component";
+                }
+                true
             }
             _ => true,
         });

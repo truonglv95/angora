@@ -46,21 +46,110 @@ export interface ComponentType<T = any> {
   __angora_styles__?: string[];
 }
 
+export type ComponentMetadataInput = ComponentMetadata | string | TemplateStringsArray;
+
+/**
+ * Tagged template literal for HTML templates providing syntax highlighting and string interpolation.
+ */
+export function html(strings: TemplateStringsArray, ...values: any[]): string {
+  let result = '';
+  for (let i = 0; i < strings.length; i++) {
+    result += strings[i];
+    if (i < values.length) {
+      result += values[i];
+    }
+  }
+  return result;
+}
+
+/**
+ * Tagged template literal for CSS stylesheets providing syntax highlighting.
+ */
+export function css(strings: TemplateStringsArray, ...values: any[]): string {
+  let result = '';
+  for (let i = 0; i < strings.length; i++) {
+    result += strings[i];
+    if (i < values.length) {
+      result += values[i];
+    }
+  }
+  return result;
+}
+
 /**
  * Component decorator defining an Angora component
+ * Supports:
+ * - Full metadata object: `@Component({ template: '...', selector: '...' })`
+ * - Shorthand template string: `@Component('<h1>{{ count }}</h1>')`
+ * - Shorthand tagged template: `@Component(html`<h1>{{ count }}</h1>`)` or `@Component`\`<h1>{{ count }}</h1>\``
+ * - Shorthand template file path: `@Component('./counter.html')`
+ * - Zero-config convention: `@Component()` or bare `@Component`
  * @example
- * @Component({
- *   template: `
- *     <h1>Count: {{ count() }}</h1>
- *     <button (click)="count.inc()">+</button>
- *   `
- * })
+ * @Component(`
+ *   <h1>Count: {{ count }}</h1>
+ *   <button (click)="count.inc()">+</button>
+ * `)
  * export class CounterComponent {
  *   count = signal(0);
  * }
  */
-export function Component(metadata: ComponentMetadata) {
+export function Component(
+  metadataOrTemplate?: ComponentMetadataInput | Function,
+  ...restValues: any[]
+): any {
+  if (typeof metadataOrTemplate === 'function') {
+    // Bare decorator: @Component
+    const target = metadataOrTemplate as any;
+    const selector = toKebabCase(target.name || 'angora-component');
+    const def: ComponentDef<any> = {
+      selector,
+      type: target,
+      metadata: { selector, template: '' },
+    };
+    const compTarget = target as unknown as ComponentType<any>;
+    compTarget.ɵcmp = def;
+    compTarget[COMPONENT_DEF] = def;
+    return target;
+  }
+
+  // Tagged template usage: @Component`<h1>...</h1>`
+  if (Array.isArray(metadataOrTemplate) && 'raw' in metadataOrTemplate) {
+    let tmpl = '';
+    const strings = metadataOrTemplate as TemplateStringsArray;
+    for (let i = 0; i < strings.length; i++) {
+      tmpl += strings[i];
+      if (i < restValues.length) {
+        tmpl += restValues[i];
+      }
+    }
+    return function <T extends { new (...args: any[]): any }>(target: T) {
+      const selector = toKebabCase(target.name || 'angora-component');
+      const def: ComponentDef<InstanceType<T>> = {
+        selector,
+        type: target,
+        metadata: { selector, template: tmpl },
+      };
+      const compTarget = target as unknown as ComponentType<InstanceType<T>>;
+      compTarget.ɵcmp = def;
+      compTarget[COMPONENT_DEF] = def;
+      return target;
+    };
+  }
+
   return function <T extends { new (...args: any[]): any }>(target: T) {
+    let metadata: ComponentMetadata;
+    if (typeof metadataOrTemplate === 'string') {
+      metadata = {
+        template: metadataOrTemplate,
+      };
+    } else if (metadataOrTemplate && typeof metadataOrTemplate === 'object') {
+      metadata = metadataOrTemplate as ComponentMetadata;
+    } else {
+      metadata = {
+        template: '',
+      };
+    }
+
     const selector = metadata.selector || toKebabCase(target.name || 'angora-component');
     const def: ComponentDef<InstanceType<T>> = {
       selector,
@@ -74,6 +163,7 @@ export function Component(metadata: ComponentMetadata) {
     };
     const compTarget = target as unknown as ComponentType<InstanceType<T>>;
     compTarget.ɵcmp = def;
+    compTarget[COMPONENT_DEF] = def;
     return target;
   };
 }
@@ -109,35 +199,42 @@ export type ComponentFactoryFn<T = any> = () => T & {
 /**
  * Functional component factory for defining concise, class-less components
  * @example
- * export const Counter = component({
- *   template: `<button (click)="count.inc()">Count: {{ count() }}</button>`,
- *   setup() {
+ * export const Counter = component(
+ *   `<button (click)="count.inc()">Count: {{ count() }}</button>`,
+ *   () => {
  *     const count = signal(0);
  *     return { count };
  *   }
- * });
+ * );
  */
 export function component<T extends object = any>(
-  optionsOrFn: FunctionalComponentOptions<T> | ComponentFactoryFn<T>
+  optionsOrFnOrTemplate: FunctionalComponentOptions<T> | ComponentFactoryFn<T> | string,
+  maybeSetup?: (ctx: any) => T | void
 ): ComponentType<T> {
   let metadata: ComponentMetadata;
   let setupFn: ((ctx: any) => any) | undefined;
 
-  if (typeof optionsOrFn === 'function') {
-    setupFn = optionsOrFn;
+  if (typeof optionsOrFnOrTemplate === 'string') {
+    metadata = {
+      selector: 'angora-component',
+      template: optionsOrFnOrTemplate,
+    };
+    setupFn = maybeSetup;
+  } else if (typeof optionsOrFnOrTemplate === 'function') {
+    setupFn = optionsOrFnOrTemplate;
     metadata = {
       selector: 'angora-component',
       template: '',
     };
   } else {
     metadata = {
-      selector: optionsOrFn.selector || 'angora-component',
-      template: optionsOrFn.template,
-      imports: optionsOrFn.imports,
-      styles: optionsOrFn.styles,
-      providers: optionsOrFn.providers,
+      selector: optionsOrFnOrTemplate.selector || 'angora-component',
+      template: optionsOrFnOrTemplate.template,
+      imports: optionsOrFnOrTemplate.imports,
+      styles: optionsOrFnOrTemplate.styles,
+      providers: optionsOrFnOrTemplate.providers,
     };
-    setupFn = optionsOrFn.setup;
+    setupFn = optionsOrFnOrTemplate.setup;
   }
 
   function FunctionalComponent(this: any) {
