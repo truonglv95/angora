@@ -59,7 +59,7 @@ describe('@angora-js/core - forwardRef & Lazy Imports Resolution', () => {
     }
 
     runInInjectionContext(injector, () => {
-      const instance = inject(forwardRef(() => LateService));
+      const instance = inject<LateService>(forwardRef(() => LateService));
       expect(instance).toBeInstanceOf(LateService);
       expect(instance.name).toBe('late-service');
     });

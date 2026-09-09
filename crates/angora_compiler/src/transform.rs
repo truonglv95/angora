@@ -298,9 +298,10 @@ fn extract_entity_metadata<'a>(
                                             },
                                             Some("imports") => {
                                                 let span = p.value.span();
-                                                imports_str = Some(source
-                                                    [span.start as usize..span.end as usize]
-                                                    .to_string());
+                                                imports_str = Some(
+                                                    source[span.start as usize..span.end as usize]
+                                                        .to_string(),
+                                                );
                                             }
                                             Some("styles") => {
                                                 if let oxc_ast::ast::Expression::ArrayExpression(
@@ -661,12 +662,18 @@ pub fn transform_component(source: &str) -> Result<String, String> {
                                 let mut tags = HashSet::new();
                                 let mut attrs = HashSet::new();
                                 let mut pipes = HashSet::new();
-                                collect_template_usages(&template_ast, &mut tags, &mut attrs, &mut pipes);
+                                collect_template_usages(
+                                    &template_ast,
+                                    &mut tags,
+                                    &mut attrs,
+                                    &mut pipes,
+                                );
 
                                 let mut auto_imports = Vec::new();
                                 let mut seen = HashSet::new();
 
-                                for sym in imported_symbols.iter().chain(local_entity_names.iter()) {
+                                for sym in imported_symbols.iter().chain(local_entity_names.iter())
+                                {
                                     if sym == &comp.class_name || seen.contains(sym) {
                                         continue;
                                     }

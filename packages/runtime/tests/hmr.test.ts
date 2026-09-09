@@ -192,8 +192,8 @@ describe('@angora-js/runtime - Fine-Grained HMR Engine', () => {
     expect(ref).not.toBeNull();
 
     // User edits form
-    ref!.instance.form.controls.username.setValue('bob');
-    ref!.instance.form.controls.email.setValue('bob@company.com');
+    ref!.instance.form.controls.username.setValue!('bob');
+    ref!.instance.form.controls.email.setValue!('bob@company.com');
 
     // Trigger HMR
     @Component({

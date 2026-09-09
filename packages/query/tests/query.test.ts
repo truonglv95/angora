@@ -238,6 +238,6 @@ describe('@angora-js/query - Enterprise Asynchronous State & Caching Engine', ()
 
     expect(savedItem).toBe('Angora is fast');
     expect(addMutation.status()).toBe('success');
-    expect(qc.getQueryData(['lastSaved'])).toBe('Angora is fast');
+    expect(qc.getQueryData<string>(['lastSaved'])).toBe('Angora is fast');
   });
 });

@@ -15,13 +15,11 @@ export type FormFieldDef<T = any> =
   | [T, (ValidatorFn | ValidatorFn[])?, (AsyncValidatorFn | AsyncValidatorFn[])?]
   | T;
 
-/**
- * Configuration definition for a specific field when declaring a form with an explicit model TModel.
- */
 export type FormFieldConfig<T> =
   | AbstractControl<T>
   | [T, (ValidatorFn | ValidatorFn[])?, (AsyncValidatorFn | AsyncValidatorFn[])?]
-  | T;
+  | [T, ...any[]]
+  | (T extends any[] ? never : T);
 
 /**
  * Strictly-typed configuration matching an explicit model TModel.
@@ -34,17 +32,43 @@ export type FormConfig<TModel> = {
       : FormFieldConfig<TModel[K]>;
 };
 
-/**
- * Infer the runtime value model from an inferred configuration object.
- */
+export type FormValidator =
+  | ValidatorFn
+  | ValidatorFn[]
+  | AsyncValidatorFn
+  | AsyncValidatorFn[]
+  | readonly ValidatorFn[];
+
+export type ExtractFormValue<Item> = Exclude<Item, FormValidator>;
+
+export type Widen<T> = T extends string
+  ? string
+  : T extends number
+    ? number
+    : T extends boolean
+      ? boolean
+      : T extends bigint
+        ? bigint
+        : T extends symbol
+          ? symbol
+          : T;
+
 export type InferFieldModel<T> =
   T extends AbstractControl<infer V>
     ? V
-    : T extends [infer V, ...any[]]
-      ? V
-      : T extends Record<string, any>
-        ? InferFormModel<T>
-        : T;
+    : T extends readonly [infer V, ...any[]]
+      ? Widen<V>
+      : T extends [infer V, ...any[]]
+        ? Widen<V>
+        : T extends Array<infer Item>
+          ? [ExtractFormValue<Item>] extends [never]
+            ? any[]
+            : [Item] extends [ExtractFormValue<Item>]
+              ? Widen<Item>[]
+              : Widen<ExtractFormValue<Item>>
+          : T extends Record<string, any>
+            ? InferFormModel<T>
+            : Widen<T>;
 
 export type InferFormModel<TConfig> = {
   -readonly [K in keyof TConfig]: InferFieldModel<TConfig[K]>;
@@ -54,9 +78,9 @@ export type InferFormModel<TConfig> = {
  * Strictly-typed child controls mapping for a given model TModel.
  */
 export type TypedControls<TModel> = {
-  readonly [K in keyof TModel]: TModel[K] extends Array<infer Item>
+  readonly [K in keyof TModel]: [TModel[K]] extends [Array<infer Item>]
     ? FormArray<AbstractControl<Item>>
-    : TModel[K] extends Record<string, any>
+    : [TModel[K]] extends [Record<string, any>]
       ? TypedFormGroup<TModel[K]>
       : FormControl<TModel[K]>;
 };
@@ -80,7 +104,7 @@ export function control<T = any>(
   validators?: ValidatorFn | ValidatorFn[],
   asyncValidators?: AsyncValidatorFn | AsyncValidatorFn[]
 ): FormControl<T> {
-  return new FormControl<T>(initialValue, validators, asyncValidators);
+  return new FormControl(initialValue, validators, asyncValidators);
 }
 
 /**
@@ -107,15 +131,6 @@ export function formArray<T = any>(
 }
 
 /**
- * Model-First (Top-Down): Explicit Generic Model
- * e.g. `const userForm = form<UserProfile>({ name: ['', required], age: 18 });`
- */
-export function form<TModel extends Record<string, any>>(
-  config: FormConfig<TModel>,
-  options?: FormOptions<TModel>
-): TypedFormGroup<TModel>;
-
-/**
  * Inference-First (Bottom-Up): Type Inferred from Config
  * e.g. `const loginForm = form({ email: ['', required], password: '' });`
  */
@@ -123,6 +138,15 @@ export function form<TConfig extends Record<string, any>>(
   config: TConfig,
   options?: FormOptions<InferFormModel<TConfig>>
 ): TypedFormGroup<InferFormModel<TConfig>>;
+
+/**
+ * Model-First (Top-Down): Explicit Generic Model
+ * e.g. `const userForm = form<UserProfile>({ name: ['', required], age: 18 });`
+ */
+export function form<TModel extends Record<string, any>>(
+  config: FormConfig<TModel>,
+  options?: FormOptions<TModel>
+): TypedFormGroup<TModel>;
 
 /**
  * Ultra-lean signal form builder factory.

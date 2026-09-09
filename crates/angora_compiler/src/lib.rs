@@ -321,11 +321,13 @@ mod tests {
         assert!(result.contains("HighlightDirective"));
 
         // Extract the imports: [...] snippet
-        let imports_line = result.lines().find(|l| l.contains("imports: [")).unwrap_or("");
+        let imports_line = result
+            .lines()
+            .find(|l| l.contains("imports: ["))
+            .unwrap_or("");
         assert!(!imports_line.contains("UserProfile"));
         assert!(!imports_line.contains("Component"));
         assert!(!imports_line.contains("signal"));
         assert!(!result.contains("@Component"));
     }
 }
-

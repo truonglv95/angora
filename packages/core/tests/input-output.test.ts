@@ -2,6 +2,7 @@ import { describe, test, expect } from 'bun:test';
 import {
   input,
   output,
+  model,
   IS_INPUT_SIGNAL,
   IS_OUTPUT_EMITTER,
   DefaultDestroyRef,
@@ -116,7 +117,6 @@ describe('@angora-js/core - Input & Output Primitives', () => {
   });
 
   test('should support model.required()', () => {
-    const { model } = require('../src/index.ts');
     const title = model.required<string>();
     expect(title.__required).toBe(true);
 
