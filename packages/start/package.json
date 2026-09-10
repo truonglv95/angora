@@ -13,10 +13,10 @@
     }
   },
   "dependencies": {
-    "@angora-js/core": "^0.1.1",
-    "@angora-js/runtime": "^0.1.1",
-    "@angora-js/router": "^0.1.1",
-    "@angora-js/server": "^0.1.1"
+    "@angora-js/core": "workspace:*",
+    "@angora-js/runtime": "workspace:*",
+    "@angora-js/router": "workspace:*",
+    "@angora-js/server": "workspace:*"
   },
   "devDependencies": {
     "@angora-js/compiler": "workspace:*"

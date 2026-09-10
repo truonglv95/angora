@@ -13,7 +13,7 @@
     }
   },
   "dependencies": {
-    "@angora-js/core": "^0.1.1"
+    "@angora-js/core": "workspace:*"
   },
   "scripts": {
     "test": "bun test"

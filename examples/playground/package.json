@@ -22,6 +22,7 @@
     "@angora-js/i18n": "workspace:*"
   },
   "devDependencies": {
+    "@angora-js/compiler": "workspace:*",
     "@angora-js/vite-plugin": "workspace:*",
     "typescript": "^7.0.2",
     "vite": "^8.2.2"

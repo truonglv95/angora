@@ -17,8 +17,8 @@
     }
   },
   "dependencies": {
-    "@angora-js/core": "^0.1.1",
-    "@angora-js/compiler": "^0.1.1"
+    "@angora-js/core": "workspace:*",
+    "@angora-js/compiler": "workspace:*"
   },
   "peerDependencies": {
     "vite": ">=5.0.0"

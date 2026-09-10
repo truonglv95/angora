@@ -15,8 +15,8 @@
     "./scss": "./dist/scss/index.scss"
   },
   "dependencies": {
-    "@angora-js/core": "^0.1.1",
-    "@angora-js/runtime": "^0.1.1"
+    "@angora-js/core": "workspace:*",
+    "@angora-js/runtime": "workspace:*"
   },
   "scripts": {
     "test": "bun test"

@@ -95,12 +95,18 @@ function updatePackages() {
       pkg.sideEffects = false;
     }
 
-    // Replace workspace:* protocols with real semver version for npm publish
+    // In monorepo development, internal packages must use workspace:* so bun/pnpm links local packages
+    // Only convert to real semver when explicitly preparing for npm publish (--publish)
+    const forPublish = process.argv.includes('--publish');
     for (const depType of ['dependencies', 'peerDependencies', 'optionalDependencies'] as const) {
       if (pkg[depType]) {
         for (const [dep, ver] of Object.entries(pkg[depType])) {
-          if (typeof ver === 'string' && (ver === 'workspace:*' || ver.startsWith('workspace:'))) {
-            pkg[depType][dep] = `^${currentVersion}`;
+          if (dep.startsWith('@angora-js/') && !dep.includes('compiler-')) {
+            if (forPublish) {
+              pkg[depType][dep] = `^${currentVersion}`;
+            } else {
+              pkg[depType][dep] = 'workspace:*';
+            }
           }
         }
       }
@@ -131,6 +137,14 @@ function updatePackages() {
     if (dir === 'ui') {
       pkg.exports['./scss/*'] = './dist/scss/*';
       pkg.exports['./scss'] = './dist/scss/index.scss';
+    }
+
+    if (dir === 'vite-plugin') {
+      pkg.exports['./client'] = {
+        types: './client.d.ts',
+        default: './client.d.ts',
+      };
+      pkg.files = ['dist', 'client.d.ts'];
     }
 
     if (dir === 'create-angora') {

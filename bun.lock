@@ -24,7 +24,7 @@
     },
     "benchmarks/krausest": {
       "name": "angora-krausest-benchmark",
-      "version": "0.1.0",
+      "version": "0.1.2",
       "dependencies": {
         "@angora-js/core": "workspace:*",
         "@angora-js/runtime": "workspace:*",
@@ -38,7 +38,7 @@
     },
     "examples/playground": {
       "name": "playground",
-      "version": "0.1.0",
+      "version": "0.1.2",
       "dependencies": {
         "@angora-js/animations": "workspace:*",
         "@angora-js/core": "workspace:*",
@@ -53,6 +53,7 @@
         "@angora-js/ui": "workspace:*",
       },
       "devDependencies": {
+        "@angora-js/compiler": "workspace:*",
         "@angora-js/vite-plugin": "workspace:*",
         "typescript": "^7.0.2",
         "vite": "^8.2.2",
@@ -60,7 +61,7 @@
     },
     "packages/animations": {
       "name": "@angora-js/animations",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/core": "workspace:*",
         "@angora-js/runtime": "workspace:*",
@@ -68,7 +69,7 @@
     },
     "packages/cli": {
       "name": "@angora-js/cli",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "bin": {
         "angora": "./bin/angora.js",
       },
@@ -91,25 +92,31 @@
     },
     "packages/compiler": {
       "name": "@angora-js/compiler",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/core": "workspace:*",
+      },
+      "optionalDependencies": {
+        "@angora-js/compiler-darwin-arm64": "^0.2.0",
+        "@angora-js/compiler-darwin-x64": "^0.2.0",
+        "@angora-js/compiler-linux-x64-gnu": "^0.2.0",
+        "@angora-js/compiler-win32-x64-msvc": "^0.2.0",
       },
     },
     "packages/core": {
       "name": "@angora-js/core",
-      "version": "0.1.0",
+      "version": "0.2.0",
     },
     "packages/create-angora": {
       "name": "create-angora",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "bin": {
         "create-angora": "./bin/index.js",
       },
     },
     "packages/devtools": {
       "name": "@angora-js/devtools",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/core": "workspace:*",
         "@angora-js/runtime": "workspace:*",
@@ -117,29 +124,29 @@
     },
     "packages/eslint-plugin-angora": {
       "name": "@angora-js/eslint-plugin",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "peerDependencies": {
         "eslint": ">=8.0.0",
       },
     },
     "packages/forms": {
       "name": "@angora-js/forms",
-      "version": "0.1.0",
+      "version": "0.2.0",
     },
     "packages/http": {
       "name": "@angora-js/http",
-      "version": "0.1.0",
+      "version": "0.2.0",
     },
     "packages/i18n": {
       "name": "@angora-js/i18n",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/core": "workspace:*",
       },
     },
     "packages/prettier-plugin-angora": {
       "name": "@angora-js/prettier-plugin",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "devDependencies": {
         "prettier": "^3.2.5",
       },
@@ -149,21 +156,21 @@
     },
     "packages/primitives": {
       "name": "@angora-js/primitives",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/core": "workspace:*",
       },
     },
     "packages/query": {
       "name": "@angora-js/query",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/core": "workspace:*",
       },
     },
     "packages/router": {
       "name": "@angora-js/router",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/core": "workspace:*",
         "@angora-js/runtime": "workspace:*",
@@ -174,7 +181,7 @@
     },
     "packages/runtime": {
       "name": "@angora-js/runtime",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/core": "workspace:*",
       },
@@ -184,21 +191,21 @@
     },
     "packages/rxjs-interop": {
       "name": "@angora-js/rxjs-interop",
-      "version": "1.2.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/core": "workspace:*",
       },
     },
     "packages/server": {
       "name": "@angora-js/server",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "devDependencies": {
         "@angora-js/compiler": "workspace:*",
       },
     },
     "packages/start": {
       "name": "@angora-js/start",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/core": "workspace:*",
         "@angora-js/router": "workspace:*",
@@ -211,7 +218,7 @@
     },
     "packages/testing": {
       "name": "@angora-js/testing",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/compiler": "workspace:*",
         "@angora-js/core": "workspace:*",
@@ -220,7 +227,7 @@
     },
     "packages/ui": {
       "name": "@angora-js/ui",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/core": "workspace:*",
         "@angora-js/runtime": "workspace:*",
@@ -228,7 +235,7 @@
     },
     "packages/vite-plugin": {
       "name": "@angora-js/vite-plugin",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@angora-js/compiler": "workspace:*",
         "@angora-js/core": "workspace:*",
@@ -242,7 +249,7 @@
     },
     "packages/vscode-extension": {
       "name": "angora-language-tools",
-      "version": "0.1.0",
+      "version": "0.1.2",
       "dependencies": {
         "@angora-js/cli": "workspace:*",
         "@angora-js/compiler": "workspace:*",
@@ -255,6 +262,14 @@
     "@angora-js/cli": ["@angora-js/cli@workspace:packages/cli"],
 
     "@angora-js/compiler": ["@angora-js/compiler@workspace:packages/compiler"],
+
+    "@angora-js/compiler-darwin-arm64": ["@angora-js/compiler-darwin-arm64@0.2.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-fsk8AKGaWGT3eMvgyYRIivEwtN5HyDWGeCyBUC3l+WignXaLQUnr2rFXa4BJ1ywsZrFFI/9IvofatXTUsphi3A=="],
+
+    "@angora-js/compiler-darwin-x64": ["@angora-js/compiler-darwin-x64@0.2.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-bWxpUV05FLAokbvmXGBPW1fv32tp4Wws0KcdvWNeeT25vodk3ZqLr7hJJCFAX4EXjYr1pDEnmaAw9evaUQpg/A=="],
+
+    "@angora-js/compiler-linux-x64-gnu": ["@angora-js/compiler-linux-x64-gnu@0.2.0", "", { "os": "linux", "cpu": "x64" }, "sha512-D9wUeS4cDacOF25N1u5dnZnr16c98JU8Hy6rmSllMl+uuIxsgXzoSlnS+KhQP7fLuKlNqJaOSz1V9G5tVoWlLg=="],
+
+    "@angora-js/compiler-win32-x64-msvc": ["@angora-js/compiler-win32-x64-msvc@0.2.0", "", { "os": "win32", "cpu": "x64" }, "sha512-+Y3ZGIXKrB98v0QDL1aKkYgh9Nv+L9uQleiYObJUI/97xuwevGLNQV8IZC/I3ihu7oN4MzyIb31jwl96BgAW5w=="],
 
     "@angora-js/core": ["@angora-js/core@workspace:packages/core"],
 
