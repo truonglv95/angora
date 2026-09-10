@@ -88,6 +88,40 @@ impl<'a> AstCodeGenerator<'a> {
         id
     }
 
+    pub fn push_stmt(&mut self, stmt: Statement<'a>) {
+        self.statements.push(stmt);
+    }
+
+    pub fn push_const_empty_array(&mut self, var_name: &str) {
+        let stmt = crate::ast_builder_utils::stmt_const_empty_array(&self.builder, var_name);
+        self.push_stmt(stmt);
+    }
+
+    pub fn push_push(&mut self, array: &str, item: &str) {
+        let stmt = crate::ast_builder_utils::stmt_push(&self.builder, array, item);
+        self.push_stmt(stmt);
+    }
+
+    pub fn push_return_ident(&mut self, name: &str) {
+        let stmt = crate::ast_builder_utils::stmt_return_ident(&self.builder, name);
+        self.push_stmt(stmt);
+    }
+
+    pub fn push_append_child(&mut self, parent: &str, child: &str) {
+        let stmt = crate::ast_builder_utils::stmt_append_child(&self.builder, parent, child);
+        self.push_stmt(stmt);
+    }
+
+    pub fn push_create_comment(&mut self, var_name: &str, comment: &str) {
+        let stmt = crate::ast_builder_utils::stmt_create_comment(&self.builder, var_name, comment);
+        self.push_stmt(stmt);
+    }
+
+    pub fn push_const_call0(&mut self, var_name: &str, func_name: &str) {
+        let stmt = crate::ast_builder_utils::stmt_const_call0(&self.builder, var_name, func_name);
+        self.push_stmt(stmt);
+    }
+
     fn add_statement(&mut self, stmt_str: &str) {
         let allocated_str = self.allocator.alloc_str(stmt_str);
         let options = ParseOptions {
@@ -111,15 +145,15 @@ impl<'a> AstCodeGenerator<'a> {
         self.has_bound_root_element = false;
 
         let root_nodes_var = self.next_id("roots");
-        self.add_statement(&format!("const {} = [];", root_nodes_var));
+        self.push_const_empty_array(&root_nodes_var);
 
         for node in ast {
             if let Some(node_var) = self.generate_node(node, None, &HashSet::new()) {
-                self.add_statement(&format!("{}.push({});", root_nodes_var, node_var));
+                self.push_push(&root_nodes_var, &node_var);
             }
         }
 
-        self.add_statement(&format!("return {};", root_nodes_var));
+        self.push_return_ident(&root_nodes_var);
 
         let params = FormalParameters::boxed(
             SPAN,
@@ -464,11 +498,11 @@ impl<'a> AstCodeGenerator<'a> {
                 root_var, tmpl_var
             ));
         } else {
-            self.add_statement(&format!("const {} = {}();", root_var, tmpl_var));
+            self.push_const_call0(&root_var, &tmpl_var);
         }
 
         if let Some(pv) = parent_var {
-            self.add_statement(&format!("{}.appendChild({});", pv, root_var));
+            self.push_append_child(pv, &root_var);
         }
 
         // Step 1: Pre-resolve all DOM references upfront BEFORE executing bindings/control flow.
@@ -839,10 +873,7 @@ impl<'a> AstCodeGenerator<'a> {
 
     fn generate_slot(&mut self, parent_var: Option<&str>, select: Option<&str>) -> String {
         let anchor_var = self.next_id("slot");
-        self.add_statement(&format!(
-            "const {} = createComment('angora:slot');",
-            anchor_var
-        ));
+        self.push_create_comment(&anchor_var, "angora:slot");
         let parent_append = match parent_var {
             Some(pv) => format!("{}.appendChild(_n);", pv),
             None => String::new(),
@@ -856,7 +887,7 @@ impl<'a> AstCodeGenerator<'a> {
             select_arg, parent_append
         ));
         if let Some(pv) = parent_var {
-            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
+            self.push_append_child(pv, &anchor_var);
         }
         anchor_var
     }
@@ -947,7 +978,7 @@ impl<'a> AstCodeGenerator<'a> {
         ));
 
         if let Some(pv) = parent_var {
-            self.add_statement(&format!("{}.appendChild({});", pv, text_var));
+            self.push_append_child(pv, &text_var);
         }
 
         text_var
@@ -961,11 +992,11 @@ impl<'a> AstCodeGenerator<'a> {
     ) -> String {
         let text_var = self.next_id("t");
         let expr = self.prefix_ctx(&interp.expression, scope_vars);
-        self.add_statement(&format!("const {} = createText();", text_var));
+        self.push_const_call0(&text_var, "createText");
         self.add_statement(&format!("bindText({}, () => ({}));", text_var, expr));
 
         if let Some(pv) = parent_var {
-            self.add_statement(&format!("{}.appendChild({});", pv, text_var));
+            self.push_append_child(pv, &text_var);
         }
 
         text_var
@@ -978,13 +1009,10 @@ impl<'a> AstCodeGenerator<'a> {
         scope_vars: &HashSet<String>,
     ) -> String {
         let anchor_var = self.next_id("if_anchor");
-        self.add_statement(&format!(
-            "const {} = createComment('angora:if');",
-            anchor_var
-        ));
+        self.push_create_comment(&anchor_var, "angora:if");
 
         if let Some(pv) = parent_var {
-            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
+            self.push_append_child(pv, &anchor_var);
         }
 
         let mut branches_str = Vec::new();
@@ -1016,13 +1044,10 @@ impl<'a> AstCodeGenerator<'a> {
         scope_vars: &HashSet<String>,
     ) -> String {
         let anchor_var = self.next_id("for_anchor");
-        self.add_statement(&format!(
-            "const {} = createComment('angora:for');",
-            anchor_var
-        ));
+        self.push_create_comment(&anchor_var, "angora:for");
 
         if let Some(pv) = parent_var {
-            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
+            self.push_append_child(pv, &anchor_var);
         }
 
         let iterable_expr = self.prefix_ctx(&for_block.iterable, scope_vars);
@@ -1038,14 +1063,14 @@ impl<'a> AstCodeGenerator<'a> {
         sub_gen.id_counter = self.id_counter;
         sub_gen.tmpl_counter = self.tmpl_counter;
         let item_nodes_var = sub_gen.next_id("item_roots");
-        sub_gen.add_statement(&format!("const {} = [];", item_nodes_var));
+        sub_gen.push_const_empty_array(&item_nodes_var);
 
         for child in &for_block.children {
             if let Some(node_var) = sub_gen.generate_node(child, None, &item_scope) {
-                sub_gen.add_statement(&format!("{}.push({});", item_nodes_var, node_var));
+                sub_gen.push_push(&item_nodes_var, &node_var);
             }
         }
-        sub_gen.add_statement(&format!("return {};", item_nodes_var));
+        sub_gen.push_return_ident(&item_nodes_var);
 
         self.id_counter = sub_gen.id_counter;
         self.tmpl_counter = sub_gen.tmpl_counter;
@@ -1115,13 +1140,10 @@ impl<'a> AstCodeGenerator<'a> {
         scope_vars: &HashSet<String>,
     ) -> String {
         let anchor_var = self.next_id("sw_anchor");
-        self.add_statement(&format!(
-            "const {} = createComment('angora:switch');",
-            anchor_var
-        ));
+        self.push_create_comment(&anchor_var, "angora:switch");
 
         if let Some(pv) = parent_var {
-            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
+            self.push_append_child(pv, &anchor_var);
         }
 
         let expr = self.prefix_ctx(&sw_block.expression, scope_vars);
@@ -1156,13 +1178,10 @@ impl<'a> AstCodeGenerator<'a> {
         scope_vars: &HashSet<String>,
     ) -> String {
         let anchor_var = self.next_id("anchor_defer");
-        self.add_statement(&format!(
-            "const {} = createComment('angora:defer');",
-            anchor_var
-        ));
+        self.push_create_comment(&anchor_var, "angora:defer");
 
         if let Some(pv) = parent_var {
-            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
+            self.push_append_child(pv, &anchor_var);
         }
 
         let triggers_json: Vec<String> = defer_block
@@ -1244,28 +1263,24 @@ impl<'a> AstCodeGenerator<'a> {
         scope_vars: &HashSet<String>,
     ) -> String {
         let anchor_var = self.next_id("dyn_anchor");
-        self.add_statement(&format!(
-            "const {} = createComment('angora:dynamic');",
-            anchor_var
-        ));
+        self.push_create_comment(&anchor_var, "angora:dynamic");
 
         if let Some(pv) = parent_var {
-            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
+            self.push_append_child(pv, &anchor_var);
         }
 
         let comp_prop = dyn_el
             .properties
             .iter()
-            .find(|p| p.name == "component" || p.name == "componentOutlet" || p.name == "is");
-        let comp_expr = if let Some(cp) = comp_prop {
-            self.prefix_ctx(&cp.expression, scope_vars)
-        } else {
-            "null".to_string()
+            .find(|p| p.name == "component" || p.name == "componentOutlet");
+
+        let comp_expr = match comp_prop {
+            Some(p) => self.prefix_ctx(&p.expression, scope_vars),
+            None => "null".to_string(),
         };
 
-        let inputs_prop = dyn_el.properties.iter().find(|p| p.name == "inputs");
-        let inputs_expr = if let Some(ip) = inputs_prop {
-            format!("() => ({})", self.prefix_ctx(&ip.expression, scope_vars))
+        let inputs_expr = if let Some(inp) = dyn_el.properties.iter().find(|p| p.name == "inputs") {
+            format!("() => ({})", self.prefix_ctx(&inp.expression, scope_vars))
         } else {
             "undefined".to_string()
         };
@@ -1287,14 +1302,14 @@ impl<'a> AstCodeGenerator<'a> {
         sub_gen.id_counter = self.id_counter;
         sub_gen.tmpl_counter = self.tmpl_counter;
         let sub_roots_var = sub_gen.next_id("sub_roots");
-        sub_gen.add_statement(&format!("const {} = [];", sub_roots_var));
+        sub_gen.push_const_empty_array(&sub_roots_var);
 
         for child in children {
             if let Some(node_var) = sub_gen.generate_node(child, None, scope_vars) {
-                sub_gen.add_statement(&format!("{}.push({});", sub_roots_var, node_var));
+                sub_gen.push_push(&sub_roots_var, &node_var);
             }
         }
-        sub_gen.add_statement(&format!("return {};", sub_roots_var));
+        sub_gen.push_return_ident(&sub_roots_var);
 
         self.id_counter = sub_gen.id_counter;
         self.tmpl_counter = sub_gen.tmpl_counter;
