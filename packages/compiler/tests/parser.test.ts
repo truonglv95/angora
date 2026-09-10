@@ -249,9 +249,10 @@ describe('@angora-js/compiler - Template Parser', () => {
     );
     const code = compileTemplate(ast);
 
-    expect(code).toContain("mountComponent('app-user-card'");
-    expect(code).toContain("'user': () => (ctx.currentUser())");
-    expect(code).toContain("'select': ($event) => { (ctx.onSelect($event)); }");
+    expect(code).toMatch(/mountComponent\(['"]app-user-card['"]/);
+    expect(code).toMatch(/['"]user['"]:\s*\(\)\s*=>\s*\(?ctx\.currentUser\(\)\)?/);
+    expect(code).toMatch(/['"]select['"]:\s*\(\$event\)\s*=>/);
+    expect(code).toContain('ctx.onSelect($event)');
   });
 
   test('should generate slot projection for <ng-content>', () => {

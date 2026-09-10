@@ -1,4 +1,8 @@
 use crate::ast::*;
+use oxc_allocator::{Allocator, Vec as ArenaVec};
+use oxc_ast::{ast::*, builder::AstBuilder};
+use oxc_parser::{ParseOptions, Parser};
+use oxc_span::SPAN;
 use std::collections::HashSet;
 
 fn escape_html_attr(s: &str) -> String {
@@ -31,33 +35,48 @@ struct NodeBinding {
     kind: BindingKind,
 }
 
-pub struct CodeGenerator {
+/// High-performance OXC AST-based code generator for Angora templates.
+///
+/// Constructs real JavaScript AST nodes (Function, ArrowFunctionExpression,
+/// Statements, and CallExpressions) allocated into OXC's bump arena (`Allocator`)
+/// and formats code via `oxc_codegen`.
+pub struct AstCodeGenerator<'a> {
+    pub allocator: &'a Allocator,
+    pub builder: AstBuilder<'a>,
     id_counter: usize,
     tmpl_counter: usize,
     pub templates: Vec<(String, String)>,
-    statements: Vec<String>,
+    pub statements: ArenaVec<'a, Statement<'a>>,
     pub scope_id: Option<String>,
     has_bound_root_element: bool,
 }
 
-impl CodeGenerator {
-    pub fn new() -> Self {
+impl<'a> AstCodeGenerator<'a> {
+    pub fn new(allocator: &'a Allocator) -> Self {
+        let builder = AstBuilder::new(allocator);
+        let statements = ArenaVec::new_in(&builder);
         Self {
+            allocator,
+            builder,
             id_counter: 0,
             tmpl_counter: 0,
             templates: Vec::new(),
-            statements: Vec::new(),
+            statements,
             scope_id: None,
             has_bound_root_element: false,
         }
     }
 
-    pub fn with_scope(scope_id: Option<String>) -> Self {
+    pub fn with_scope(allocator: &'a Allocator, scope_id: Option<String>) -> Self {
+        let builder = AstBuilder::new(allocator);
+        let statements = ArenaVec::new_in(&builder);
         Self {
+            allocator,
+            builder,
             id_counter: 0,
             tmpl_counter: 0,
             templates: Vec::new(),
-            statements: Vec::new(),
+            statements,
             scope_id,
             has_bound_root_element: false,
         }
@@ -69,7 +88,22 @@ impl CodeGenerator {
         id
     }
 
-    pub fn generate(&mut self, ast: &[TemplateNode]) -> String {
+    fn add_statement(&mut self, stmt_str: &str) {
+        let allocated_str = self.allocator.alloc_str(stmt_str);
+        let options = ParseOptions {
+            allow_return_outside_function: true,
+            ..ParseOptions::default()
+        };
+        let parsed = Parser::new(self.allocator, allocated_str, SourceType::mjs())
+            .with_options(options)
+            .parse();
+        for stmt in parsed.program.body {
+            self.statements.push(stmt);
+        }
+    }
+
+    /// Generate the full OXC AST `Expression` representing the component render function.
+    pub fn generate_expression(&mut self, ast: &[TemplateNode]) -> Expression<'a> {
         self.statements.clear();
         self.templates.clear();
         self.id_counter = 0;
@@ -77,39 +111,120 @@ impl CodeGenerator {
         self.has_bound_root_element = false;
 
         let root_nodes_var = self.next_id("roots");
-        self.statements
-            .push(format!("const {} = [];", root_nodes_var));
+        self.add_statement(&format!("const {} = [];", root_nodes_var));
 
         for node in ast {
             if let Some(node_var) = self.generate_node(node, None, &HashSet::new()) {
-                self.statements
-                    .push(format!("{}.push({});", root_nodes_var, node_var));
+                self.add_statement(&format!("{}.push({});", root_nodes_var, node_var));
             }
         }
 
-        self.statements.push(format!("return {};", root_nodes_var));
+        self.add_statement(&format!("return {};", root_nodes_var));
 
-        let body = self.statements.join("\n  ");
+        let params = FormalParameters::boxed(
+            SPAN,
+            FormalParameterKind::FormalParameter,
+            [
+                FormalParameter::new_plain(
+                    SPAN,
+                    BindingPattern::new_binding_identifier(SPAN, "ctx", &self.builder),
+                    &self.builder,
+                ),
+                FormalParameter::new_plain(
+                    SPAN,
+                    BindingPattern::new_binding_identifier(SPAN, "injector", &self.builder),
+                    &self.builder,
+                ),
+                FormalParameter::new_plain(
+                    SPAN,
+                    BindingPattern::new_binding_identifier(SPAN, "rootNode", &self.builder),
+                    &self.builder,
+                ),
+            ],
+            None,
+            &self.builder,
+        );
+
+        let statements = std::mem::replace(&mut self.statements, ArenaVec::new_in(&self.builder));
+        let body = FunctionBody::boxed(SPAN, [], statements, &self.builder);
+
+        let render_fn = Function::boxed(
+            SPAN,
+            FunctionType::FunctionExpression,
+            Some(BindingIdentifier::new(
+                SPAN,
+                "__angora_render__",
+                &self.builder,
+            )),
+            false,
+            false,
+            false,
+            None,
+            None,
+            params,
+            None,
+            Some(body),
+            &self.builder,
+        );
+
         if self.templates.is_empty() {
-            format!(
-                "function __angora_render__(ctx, injector, rootNode) {{\n  {}\n}}",
-                body
-            )
+            Expression::FunctionExpression(render_fn)
         } else {
-            let mut tmpl_defs = Vec::new();
+            let mut iife_stmts = ArenaVec::new_in(&self.builder);
+            let options = ParseOptions {
+                allow_return_outside_function: true,
+                ..ParseOptions::default()
+            };
             for (tmpl_name, tmpl_html) in &self.templates {
-                tmpl_defs.push(format!(
+                let decl_code = format!(
                     "const {} = /*@__PURE__*/ template({});",
                     tmpl_name,
                     serde_json::to_string(tmpl_html).unwrap_or_else(|_| "\"\"".to_string())
-                ));
+                );
+                let allocated_decl = self.allocator.alloc_str(&decl_code);
+                let parsed = Parser::new(self.allocator, allocated_decl, SourceType::mjs())
+                    .with_options(options)
+                    .parse();
+                for stmt in parsed.program.body {
+                    iife_stmts.push(stmt);
+                }
             }
-            format!(
-                "(() => {{\n  {}\n  return function __angora_render__(ctx, injector, rootNode) {{\n    {}\n  }};\n}})()",
-                tmpl_defs.join("\n  "),
-                body.replace('\n', "\n  ")
-            )
+
+            let ret_stmt = Statement::new_return_statement(
+                SPAN,
+                Some(Expression::FunctionExpression(render_fn)),
+                &self.builder,
+            );
+            iife_stmts.push(ret_stmt);
+
+            let iife_params = FormalParameters::boxed(
+                SPAN,
+                FormalParameterKind::FormalParameter,
+                [],
+                None,
+                &self.builder,
+            );
+            let iife_body = FunctionBody::boxed(SPAN, [], iife_stmts, &self.builder);
+            let arrow_fn = Expression::new_arrow_function_expression(
+                SPAN,
+                false,
+                None,
+                iife_params,
+                None,
+                ArrowFunctionBody::FunctionBody(iife_body),
+                &self.builder,
+            );
+
+            Expression::new_call_expression(SPAN, arrow_fn, None, [], false, &self.builder)
         }
+    }
+
+    /// Generate JavaScript string from AST using OXC codegen.
+    pub fn generate(&mut self, ast: &[TemplateNode]) -> String {
+        let expr = self.generate_expression(ast);
+        let mut codegen = oxc_codegen::Codegen::new();
+        codegen.print_expression(&expr);
+        codegen.into_source_text()
     }
 
     fn is_custom_component(&self, name: &str) -> bool {
@@ -344,22 +459,19 @@ impl CodeGenerator {
         let root_var = self.next_id("el");
         if parent_var.is_none() && !self.has_bound_root_element {
             self.has_bound_root_element = true;
-            self.statements.push(format!(
+            self.add_statement(&format!(
                 "const {} = (rootNode && rootNode.nodeType === 1) ? rootNode : {}();",
                 root_var, tmpl_var
             ));
         } else {
-            self.statements
-                .push(format!("const {} = {}();", root_var, tmpl_var));
+            self.add_statement(&format!("const {} = {}();", root_var, tmpl_var));
         }
 
         if let Some(pv) = parent_var {
-            self.statements
-                .push(format!("{}.appendChild({});", pv, root_var));
+            self.add_statement(&format!("{}.appendChild({});", pv, root_var));
         }
 
         // Step 1: Pre-resolve all DOM references upfront BEFORE executing bindings/control flow.
-        // This ensures node indices in childNodes remain pristine and unaffected by DOM insertions.
         let mut path_to_var = std::collections::HashMap::new();
         path_to_var.insert(vec![], root_var.clone());
 
@@ -373,8 +485,7 @@ impl CodeGenerator {
                 for idx in &binding.path {
                     path_expr = format!("{}.childNodes[{}]", path_expr, idx);
                 }
-                self.statements
-                    .push(format!("const {} = {};", var, path_expr));
+                self.add_statement(&format!("const {} = {};", var, path_expr));
                 path_to_var.insert(binding.path.clone(), var.clone());
                 var
             };
@@ -386,10 +497,8 @@ impl CodeGenerator {
             let target_var = &binding_targets[i];
             if let BindingKind::SelfElement(ref elem) = binding.kind {
                 for ref_node in &elem.references {
-                    self.statements
-                        .push(format!("const {} = {};", ref_node.name, target_var));
-                    self.statements
-                        .push(format!("ctx.{} = {};", ref_node.name, target_var));
+                    self.add_statement(&format!("const {} = {};", ref_node.name, target_var));
+                    self.add_statement(&format!("ctx.{} = {};", ref_node.name, target_var));
                     local_scope_vars.insert(ref_node.name.clone());
                 }
             }
@@ -402,7 +511,7 @@ impl CodeGenerator {
             match binding.kind {
                 BindingKind::SelfElement(elem) => {
                     if !elem.attributes.is_empty() {
-                        self.statements.push(format!(
+                        self.add_statement(&format!(
                             "applyMatchingDirectives({}, ctx, injector);",
                             target_var
                         ));
@@ -410,22 +519,22 @@ impl CodeGenerator {
                     for prop in elem.properties {
                         let expr = self.prefix_ctx(&prop.expression, &local_scope_vars);
                         if let Some(class_name) = prop.name.strip_prefix("class.") {
-                            self.statements.push(format!(
+                            self.add_statement(&format!(
                                 "bindClass({}, '{}', () => Boolean({}));",
                                 target_var, class_name, expr
                             ));
                         } else if let Some(style_prop) = prop.name.strip_prefix("style.") {
-                            self.statements.push(format!(
+                            self.add_statement(&format!(
                                 "bindStyle({}, '{}', () => ({}));",
                                 target_var, style_prop, expr
                             ));
                         } else if let Some(attr_name) = prop.name.strip_prefix("attr.") {
-                            self.statements.push(format!(
+                            self.add_statement(&format!(
                                 "bindProp({}, '{}', () => ({}));",
                                 target_var, attr_name, expr
                             ));
                         } else {
-                            self.statements.push(format!(
+                            self.add_statement(&format!(
                                 "bindProp({}, '{}', () => ({}));",
                                 target_var, prop.name, expr
                             ));
@@ -434,7 +543,7 @@ impl CodeGenerator {
 
                     for two_way in elem.two_ways {
                         let expr = self.prefix_ctx(&two_way.expression, &local_scope_vars);
-                        self.statements.push(format!(
+                        self.add_statement(&format!(
                             "bindTwoWay({}, '{}', () => ({}), ($val) => {{ if (({})?.set) {{ ({}).set($val); }} else {{ ctx.{} = $val; }} }});",
                             target_var, two_way.name, expr, expr, expr, two_way.expression
                         ));
@@ -444,7 +553,7 @@ impl CodeGenerator {
                         let mut local_scope = local_scope_vars.clone();
                         local_scope.insert("$event".to_string());
                         let handler_expr = self.prefix_ctx(&ev.handler, &local_scope);
-                        self.statements.push(format!(
+                        self.add_statement(&format!(
                             "bindEvent({}, '{}', ($event) => {{ ({}); }});",
                             target_var, ev.name, handler_expr
                         ));
@@ -452,8 +561,7 @@ impl CodeGenerator {
                 }
                 BindingKind::Interpolation(expr) => {
                     let expr_str = self.prefix_ctx(&expr, scope_vars);
-                    self.statements
-                        .push(format!("bindText({}, () => ({}));", target_var, expr_str));
+                    self.add_statement(&format!("bindText({}, () => ({}));", target_var, expr_str));
                 }
                 BindingKind::IfBlock(if_b) => {
                     let mut branches_str = Vec::new();
@@ -468,7 +576,7 @@ impl CodeGenerator {
                             cond_str, render_fn
                         ));
                     }
-                    self.statements.push(format!(
+                    self.add_statement(&format!(
                         "createIf({}, [{}]);",
                         target_var,
                         branches_str.join(", ")
@@ -480,45 +588,66 @@ impl CodeGenerator {
                     loop_scope.insert(for_b.item_name.clone());
                     loop_scope.insert("$index".to_string());
 
-                    let clean_track = if for_b.track_by == "$index" {
-                        "$index".to_string()
-                    } else if for_b.track_by == "$identity" || for_b.track_by == for_b.item_name {
-                        for_b.item_name.clone()
-                    } else if for_b.track_by.contains('.') {
-                        for_b.track_by.clone()
-                    } else {
-                        format!("{}.{}", for_b.item_name, for_b.track_by)
-                    };
+                    let clean_track = for_block_track_by_str(&for_b.track_by, &for_b.item_name);
                     let track_fn = format!("({}, $index) => ({})", for_b.item_name, clean_track);
 
-                    let mut sub_gen = CodeGenerator::with_scope(self.scope_id.clone());
+                    let mut sub_gen =
+                        AstCodeGenerator::with_scope(self.allocator, self.scope_id.clone());
                     sub_gen.id_counter = self.id_counter;
                     sub_gen.tmpl_counter = self.tmpl_counter;
                     let item_nodes_var = sub_gen.next_id("item_roots");
-                    sub_gen
-                        .statements
-                        .push(format!("const {} = [];", item_nodes_var));
+                    sub_gen.add_statement(&format!("const {} = [];", item_nodes_var));
 
                     for child in &for_b.children {
                         if let Some(node_var) = sub_gen.generate_node(child, None, &loop_scope) {
                             sub_gen
-                                .statements
-                                .push(format!("{}.push({});", item_nodes_var, node_var));
+                                .add_statement(&format!("{}.push({});", item_nodes_var, node_var));
                         }
                     }
-                    sub_gen
-                        .statements
-                        .push(format!("return {};", item_nodes_var));
+                    sub_gen.add_statement(&format!("return {};", item_nodes_var));
 
                     self.id_counter = sub_gen.id_counter;
                     self.tmpl_counter = sub_gen.tmpl_counter;
                     self.templates.extend(sub_gen.templates);
 
-                    let render_item_fn = format!(
-                        "({}, $index) => {{\n    {}\n  }}",
-                        for_b.item_name,
-                        sub_gen.statements.join("\n    ")
+                    let item_params = [
+                        FormalParameter::new_plain(
+                            SPAN,
+                            BindingPattern::new_binding_identifier(
+                                SPAN,
+                                self.allocator.alloc_str(for_b.item_name.as_str()),
+                                &self.builder,
+                            ),
+                            &self.builder,
+                        ),
+                        FormalParameter::new_plain(
+                            SPAN,
+                            BindingPattern::new_binding_identifier(SPAN, "$index", &self.builder),
+                            &self.builder,
+                        ),
+                    ];
+                    let params = FormalParameters::boxed(
+                        SPAN,
+                        FormalParameterKind::FormalParameter,
+                        item_params,
+                        None,
+                        &self.builder,
                     );
+                    let statements =
+                        std::mem::replace(&mut sub_gen.statements, ArenaVec::new_in(&self.builder));
+                    let body = FunctionBody::boxed(SPAN, [], statements, &self.builder);
+                    let arrow_fn = Expression::new_arrow_function_expression(
+                        SPAN,
+                        false,
+                        None,
+                        params,
+                        None,
+                        ArrowFunctionBody::FunctionBody(body),
+                        &self.builder,
+                    );
+                    let mut codegen = oxc_codegen::Codegen::new();
+                    codegen.print_expression(&arrow_fn);
+                    let render_item_fn = codegen.into_source_text();
 
                     let empty_fn = if let Some(ref empty_block) = for_b.empty_block {
                         if !empty_block.is_empty() {
@@ -530,7 +659,7 @@ impl CodeGenerator {
                         "undefined".to_string()
                     };
 
-                    self.statements.push(format!(
+                    self.add_statement(&format!(
                         "createFor({}, () => ({}), {}, {}, {});",
                         target_var, iterable_expr, track_fn, render_item_fn, empty_fn
                     ));
@@ -551,7 +680,7 @@ impl CodeGenerator {
                         ));
                     }
 
-                    self.statements.push(format!(
+                    self.add_statement(&format!(
                         "createSwitch({}, () => ({}), [{}]);",
                         target_var,
                         expr,
@@ -615,7 +744,7 @@ impl CodeGenerator {
                         .and_then(|p| p.minimum)
                         .unwrap_or(0);
 
-                    self.statements.push(format!(
+                    self.add_statement(&format!(
                         "createDefer({}, {{\n    triggers: [{}],\n    main: {},\n    placeholder: {},\n    loading: {},\n    error: {},\n    loadingAfter: {},\n    loadingMinimum: {},\n    placeholderMinimum: {},\n  }});",
                         target_var,
                         triggers_json.join(", "),
@@ -633,7 +762,7 @@ impl CodeGenerator {
                         Some(ref s) => format!("'{}'", s.replace('\'', "\\'")),
                         None => String::new(),
                     };
-                    self.statements.push(format!(
+                    self.add_statement(&format!(
                         "if (typeof ctx.__projectedNodes === 'function') {{\n    const _projNodes = ctx.__projectedNodes({});\n    for (const _n of _projNodes) {{\n      {}.parentNode.insertBefore(_n, {});\n    }}\n  }}",
                         select_arg, target_var, target_var
                     ));
@@ -671,7 +800,7 @@ impl CodeGenerator {
                         "undefined".to_string()
                     };
 
-                    self.statements.push(format!(
+                    self.add_statement(&format!(
                         "mountComponent('{}', {}, ctx, injector, {{\n    inputs: {{ {} }},\n    outputs: {{ {} }},\n    projectedNodes: {}\n  }});",
                         child_el.name,
                         target_var,
@@ -697,7 +826,7 @@ impl CodeGenerator {
                         "undefined".to_string()
                     };
 
-                    self.statements.push(format!(
+                    self.add_statement(&format!(
                         "createDynamicComponent({}, () => ({}), {}, injector);",
                         target_var, comp_expr, inputs_expr
                     ));
@@ -710,7 +839,7 @@ impl CodeGenerator {
 
     fn generate_slot(&mut self, parent_var: Option<&str>, select: Option<&str>) -> String {
         let anchor_var = self.next_id("slot");
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "const {} = createComment('angora:slot');",
             anchor_var
         ));
@@ -722,13 +851,12 @@ impl CodeGenerator {
             Some(s) => format!("'{}'", s.replace('\'', "\\'")),
             None => String::new(),
         };
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "if (typeof ctx.__projectedNodes === 'function') {{\n    const _projNodes = ctx.__projectedNodes({});\n    for (const _n of _projNodes) {{\n      {}\n    }}\n  }}",
             select_arg, parent_append
         ));
         if let Some(pv) = parent_var {
-            self.statements
-                .push(format!("{}.appendChild({});", pv, anchor_var));
+            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
         }
         anchor_var
     }
@@ -740,24 +868,21 @@ impl CodeGenerator {
         scope_vars: &HashSet<String>,
     ) -> String {
         let host_var = self.next_id("comp_host");
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "const {} = createElement('{}');",
             host_var, el.name
         ));
         if let Some(scope) = &self.scope_id {
-            self.statements
-                .push(format!("{}.setAttribute('{}', '');", host_var, scope));
+            self.add_statement(&format!("{}.setAttribute('{}', '');", host_var, scope));
         }
 
         for ref_node in &el.references {
-            self.statements
-                .push(format!("const {} = {};", ref_node.name, host_var));
-            self.statements
-                .push(format!("ctx.{} = {};", ref_node.name, host_var));
+            self.add_statement(&format!("const {} = {};", ref_node.name, host_var));
+            self.add_statement(&format!("ctx.{} = {};", ref_node.name, host_var));
         }
 
         for attr in &el.attributes {
-            self.statements.push(format!(
+            self.add_statement(&format!(
                 "{}.setAttribute('{}', {});",
                 host_var,
                 attr.name,
@@ -797,7 +922,7 @@ impl CodeGenerator {
             "undefined".to_string()
         };
 
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "mountComponent('{}', {}, ctx, injector, {{\n    inputs: {{ {} }},\n    outputs: {{ {} }},\n    projectedNodes: {}\n  }});",
             el.name,
             host_var,
@@ -807,8 +932,7 @@ impl CodeGenerator {
         ));
 
         if let Some(pv) = parent_var {
-            self.statements
-                .push(format!("{}.appendChild({});", pv, host_var));
+            self.add_statement(&format!("{}.appendChild({});", pv, host_var));
         }
 
         host_var
@@ -816,15 +940,14 @@ impl CodeGenerator {
 
     fn generate_text(&mut self, text: &TextNode, parent_var: Option<&str>) -> String {
         let text_var = self.next_id("txt");
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "const {} = createText({});",
             text_var,
             serde_json::to_string(&text.value).unwrap_or_default()
         ));
 
         if let Some(pv) = parent_var {
-            self.statements
-                .push(format!("{}.appendChild({});", pv, text_var));
+            self.add_statement(&format!("{}.appendChild({});", pv, text_var));
         }
 
         text_var
@@ -838,14 +961,11 @@ impl CodeGenerator {
     ) -> String {
         let text_var = self.next_id("t");
         let expr = self.prefix_ctx(&interp.expression, scope_vars);
-        self.statements
-            .push(format!("const {} = createText();", text_var));
-        self.statements
-            .push(format!("bindText({}, () => ({}));", text_var, expr));
+        self.add_statement(&format!("const {} = createText();", text_var));
+        self.add_statement(&format!("bindText({}, () => ({}));", text_var, expr));
 
         if let Some(pv) = parent_var {
-            self.statements
-                .push(format!("{}.appendChild({});", pv, text_var));
+            self.add_statement(&format!("{}.appendChild({});", pv, text_var));
         }
 
         text_var
@@ -858,14 +978,13 @@ impl CodeGenerator {
         scope_vars: &HashSet<String>,
     ) -> String {
         let anchor_var = self.next_id("if_anchor");
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "const {} = createComment('angora:if');",
             anchor_var
         ));
 
         if let Some(pv) = parent_var {
-            self.statements
-                .push(format!("{}.appendChild({});", pv, anchor_var));
+            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
         }
 
         let mut branches_str = Vec::new();
@@ -881,7 +1000,7 @@ impl CodeGenerator {
             ));
         }
 
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "createIf({}, [{}]);",
             anchor_var,
             branches_str.join(", ")
@@ -897,14 +1016,13 @@ impl CodeGenerator {
         scope_vars: &HashSet<String>,
     ) -> String {
         let anchor_var = self.next_id("for_anchor");
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "const {} = createComment('angora:for');",
             anchor_var
         ));
 
         if let Some(pv) = parent_var {
-            self.statements
-                .push(format!("{}.appendChild({});", pv, anchor_var));
+            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
         }
 
         let iterable_expr = self.prefix_ctx(&for_block.iterable, scope_vars);
@@ -913,45 +1031,64 @@ impl CodeGenerator {
         item_scope.insert(for_block.item_name.clone());
         item_scope.insert("$index".to_string());
 
-        let clean_track = if for_block.track_by == "$index" {
-            "$index".to_string()
-        } else if for_block.track_by == "$identity" || for_block.track_by == for_block.item_name {
-            for_block.item_name.clone()
-        } else if for_block.track_by.contains('.') {
-            for_block.track_by.clone()
-        } else {
-            format!("{}.{}", for_block.item_name, for_block.track_by)
-        };
+        let clean_track = for_block_track_by_str(&for_block.track_by, &for_block.item_name);
         let track_fn = format!("({}, $index) => ({})", for_block.item_name, clean_track);
 
-        let mut sub_gen = CodeGenerator::with_scope(self.scope_id.clone());
+        let mut sub_gen = AstCodeGenerator::with_scope(self.allocator, self.scope_id.clone());
         sub_gen.id_counter = self.id_counter;
         sub_gen.tmpl_counter = self.tmpl_counter;
         let item_nodes_var = sub_gen.next_id("item_roots");
-        sub_gen
-            .statements
-            .push(format!("const {} = [];", item_nodes_var));
+        sub_gen.add_statement(&format!("const {} = [];", item_nodes_var));
 
         for child in &for_block.children {
             if let Some(node_var) = sub_gen.generate_node(child, None, &item_scope) {
-                sub_gen
-                    .statements
-                    .push(format!("{}.push({});", item_nodes_var, node_var));
+                sub_gen.add_statement(&format!("{}.push({});", item_nodes_var, node_var));
             }
         }
-        sub_gen
-            .statements
-            .push(format!("return {};", item_nodes_var));
+        sub_gen.add_statement(&format!("return {};", item_nodes_var));
 
         self.id_counter = sub_gen.id_counter;
         self.tmpl_counter = sub_gen.tmpl_counter;
         self.templates.extend(sub_gen.templates);
 
-        let render_item_fn = format!(
-            "({}, $index) => {{\n    {}\n  }}",
-            for_block.item_name,
-            sub_gen.statements.join("\n    ")
+        let item_params = [
+            FormalParameter::new_plain(
+                SPAN,
+                BindingPattern::new_binding_identifier(
+                    SPAN,
+                    self.allocator.alloc_str(for_block.item_name.as_str()),
+                    &self.builder,
+                ),
+                &self.builder,
+            ),
+            FormalParameter::new_plain(
+                SPAN,
+                BindingPattern::new_binding_identifier(SPAN, "$index", &self.builder),
+                &self.builder,
+            ),
+        ];
+        let params = FormalParameters::boxed(
+            SPAN,
+            FormalParameterKind::FormalParameter,
+            item_params,
+            None,
+            &self.builder,
         );
+        let statements =
+            std::mem::replace(&mut sub_gen.statements, ArenaVec::new_in(&self.builder));
+        let body = FunctionBody::boxed(SPAN, [], statements, &self.builder);
+        let arrow_fn = Expression::new_arrow_function_expression(
+            SPAN,
+            false,
+            None,
+            params,
+            None,
+            ArrowFunctionBody::FunctionBody(body),
+            &self.builder,
+        );
+        let mut codegen = oxc_codegen::Codegen::new();
+        codegen.print_expression(&arrow_fn);
+        let render_item_fn = codegen.into_source_text();
 
         let empty_fn = if let Some(empty_block) = &for_block.empty_block {
             if !empty_block.is_empty() {
@@ -963,7 +1100,7 @@ impl CodeGenerator {
             "undefined".to_string()
         };
 
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "createFor({}, () => ({}), {}, {}, {});",
             anchor_var, iterable_expr, track_fn, render_item_fn, empty_fn
         ));
@@ -978,14 +1115,13 @@ impl CodeGenerator {
         scope_vars: &HashSet<String>,
     ) -> String {
         let anchor_var = self.next_id("sw_anchor");
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "const {} = createComment('angora:switch');",
             anchor_var
         ));
 
         if let Some(pv) = parent_var {
-            self.statements
-                .push(format!("{}.appendChild({});", pv, anchor_var));
+            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
         }
 
         let expr = self.prefix_ctx(&sw_block.expression, scope_vars);
@@ -1003,7 +1139,7 @@ impl CodeGenerator {
             ));
         }
 
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "createSwitch({}, () => ({}), [{}]);",
             anchor_var,
             expr,
@@ -1020,14 +1156,13 @@ impl CodeGenerator {
         scope_vars: &HashSet<String>,
     ) -> String {
         let anchor_var = self.next_id("anchor_defer");
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "const {} = createComment('angora:defer');",
             anchor_var
         ));
 
         if let Some(pv) = parent_var {
-            self.statements
-                .push(format!("{}.appendChild({});", pv, anchor_var));
+            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
         }
 
         let triggers_json: Vec<String> = defer_block
@@ -1086,7 +1221,7 @@ impl CodeGenerator {
             .and_then(|p| p.minimum)
             .unwrap_or(0);
 
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "createDefer({}, {{\n    triggers: [{}],\n    main: {},\n    placeholder: {},\n    loading: {},\n    error: {},\n    loadingAfter: {},\n    loadingMinimum: {},\n    placeholderMinimum: {},\n  }});",
             anchor_var,
             triggers_json.join(", "),
@@ -1109,14 +1244,13 @@ impl CodeGenerator {
         scope_vars: &HashSet<String>,
     ) -> String {
         let anchor_var = self.next_id("dyn_anchor");
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "const {} = createComment('angora:dynamic');",
             anchor_var
         ));
 
         if let Some(pv) = parent_var {
-            self.statements
-                .push(format!("{}.appendChild({});", pv, anchor_var));
+            self.add_statement(&format!("{}.appendChild({});", pv, anchor_var));
         }
 
         let comp_prop = dyn_el
@@ -1136,7 +1270,7 @@ impl CodeGenerator {
             "undefined".to_string()
         };
 
-        self.statements.push(format!(
+        self.add_statement(&format!(
             "createDynamicComponent({}, () => ({}), {}, injector);",
             anchor_var, comp_expr, inputs_expr
         ));
@@ -1149,30 +1283,45 @@ impl CodeGenerator {
         children: &[TemplateNode],
         scope_vars: &HashSet<String>,
     ) -> String {
-        let mut sub_gen = CodeGenerator::with_scope(self.scope_id.clone());
+        let mut sub_gen = AstCodeGenerator::with_scope(self.allocator, self.scope_id.clone());
         sub_gen.id_counter = self.id_counter;
         sub_gen.tmpl_counter = self.tmpl_counter;
         let sub_roots_var = sub_gen.next_id("sub_roots");
-        sub_gen
-            .statements
-            .push(format!("const {} = [];", sub_roots_var));
+        sub_gen.add_statement(&format!("const {} = [];", sub_roots_var));
 
         for child in children {
             if let Some(node_var) = sub_gen.generate_node(child, None, scope_vars) {
-                sub_gen
-                    .statements
-                    .push(format!("{}.push({});", sub_roots_var, node_var));
+                sub_gen.add_statement(&format!("{}.push({});", sub_roots_var, node_var));
             }
         }
-        sub_gen
-            .statements
-            .push(format!("return {};", sub_roots_var));
+        sub_gen.add_statement(&format!("return {};", sub_roots_var));
 
         self.id_counter = sub_gen.id_counter;
         self.tmpl_counter = sub_gen.tmpl_counter;
         self.templates.extend(sub_gen.templates);
 
-        format!("() => {{\n    {}\n  }}", sub_gen.statements.join("\n    "))
+        let params = FormalParameters::boxed(
+            SPAN,
+            FormalParameterKind::FormalParameter,
+            [],
+            None,
+            &self.builder,
+        );
+        let statements =
+            std::mem::replace(&mut sub_gen.statements, ArenaVec::new_in(&self.builder));
+        let body = FunctionBody::boxed(SPAN, [], statements, &self.builder);
+        let arrow_fn = Expression::new_arrow_function_expression(
+            SPAN,
+            false,
+            None,
+            params,
+            None,
+            ArrowFunctionBody::FunctionBody(body),
+            &self.builder,
+        );
+        let mut codegen = oxc_codegen::Codegen::new();
+        codegen.print_expression(&arrow_fn);
+        codegen.into_source_text()
     }
 
     fn contains_pipe(&self, expr: &str) -> bool {
@@ -1477,11 +1626,67 @@ impl CodeGenerator {
     }
 }
 
+fn for_block_track_by_str(track_by: &str, item_name: &str) -> String {
+    if track_by == "$index" {
+        "$index".to_string()
+    } else if track_by == "$identity" || track_by == item_name {
+        item_name.to_string()
+    } else if track_by.contains('.') {
+        track_by.to_string()
+    } else {
+        format!("{}.{}", item_name, track_by)
+    }
+}
+
+/// Standalone wrapper for AST code generation maintaining full backwards compatibility.
+pub struct CodeGenerator {
+    pub templates: Vec<(String, String)>,
+    pub scope_id: Option<String>,
+}
+
+impl CodeGenerator {
+    pub fn new() -> Self {
+        Self {
+            templates: Vec::new(),
+            scope_id: None,
+        }
+    }
+
+    pub fn with_scope(scope_id: Option<String>) -> Self {
+        Self {
+            templates: Vec::new(),
+            scope_id,
+        }
+    }
+
+    pub fn generate(&mut self, ast: &[TemplateNode]) -> String {
+        let allocator = Allocator::default();
+        let mut gen = AstCodeGenerator::with_scope(&allocator, self.scope_id.clone());
+        let res = gen.generate(ast);
+        self.templates = gen.templates;
+        res
+    }
+}
+
+impl Default for CodeGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub fn compile_template(ast: &[TemplateNode]) -> String {
     CodeGenerator::new().generate(ast)
 }
 
 pub fn compile_template_with_scope(ast: &[TemplateNode], scope_id: Option<&str>) -> String {
-    let mut gen = CodeGenerator::with_scope(scope_id.map(|s| s.to_string()));
-    gen.generate(ast)
+    CodeGenerator::with_scope(scope_id.map(|s| s.to_string())).generate(ast)
+}
+
+pub fn compile_template_to_ast<'a>(
+    allocator: &'a Allocator,
+    ast: &[TemplateNode],
+    scope_id: Option<&str>,
+) -> Expression<'a> {
+    let mut gen = AstCodeGenerator::with_scope(allocator, scope_id.map(|s| s.to_string()));
+    gen.generate_expression(ast)
 }

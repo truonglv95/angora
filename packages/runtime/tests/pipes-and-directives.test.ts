@@ -62,7 +62,9 @@ describe('@angora-js/runtime - Pipes Engine (| pipe)', () => {
     const ast = parseTemplate(template);
     const code = compileTemplate(ast);
 
-    expect(code).toContain("applyPipe('uppercase', ctx.name(), [], ctx, injector)");
+    expect(code).toMatch(
+      /applyPipe\(['"]uppercase['"],\s*ctx\.name\(\),\s*\[\],\s*ctx,\s*injector\)/
+    );
   });
 
   it('should compile chained pipes with arguments in template expressions', () => {
@@ -70,8 +72,8 @@ describe('@angora-js/runtime - Pipes Engine (| pipe)', () => {
     const ast = parseTemplate(template);
     const code = compileTemplate(ast);
 
-    expect(code).toContain(
-      "applyPipe('slice', applyPipe('uppercase', ctx.message(), [], ctx, injector), [0, 4], ctx, injector)"
+    expect(code).toMatch(
+      /applyPipe\(['"]slice['"],\s*applyPipe\(['"]uppercase['"],\s*ctx\.message\(\),\s*\[\],\s*ctx,\s*injector\),\s*\[0,\s*4\],\s*ctx,\s*injector\)/
     );
   });
 });

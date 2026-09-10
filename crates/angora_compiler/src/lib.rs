@@ -373,7 +373,10 @@ mod tests {
         let ast = parse_template(template);
         let code = codegen::compile_template(&ast);
 
-        assert!(code.contains("__projectedNodes('[card-header]')"));
+        assert!(
+            code.contains("__projectedNodes('[card-header]')")
+                || code.contains("__projectedNodes(\"[card-header]\")")
+        );
         assert!(code.contains("__projectedNodes()"));
     }
 
@@ -384,7 +387,10 @@ mod tests {
         let code = codegen::compile_template(&ast);
 
         assert!(code.contains("__angora_render__(ctx, injector, rootNode)"));
-        assert!(code.contains("(rootNode && rootNode.nodeType === 1) ? rootNode :"));
+        assert!(
+            code.contains("rootNode && rootNode.nodeType === 1 ? rootNode :")
+                || code.contains("(rootNode && rootNode.nodeType === 1) ? rootNode :")
+        );
     }
 
     #[test]
