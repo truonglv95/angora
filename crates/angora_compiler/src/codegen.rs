@@ -1055,6 +1055,11 @@ impl<'a> AstCodeGenerator<'a> {
         let mut item_scope = scope_vars.clone();
         item_scope.insert(for_block.item_name.clone());
         item_scope.insert("$index".to_string());
+        item_scope.insert("$first".to_string());
+        item_scope.insert("$last".to_string());
+        item_scope.insert("$count".to_string());
+        item_scope.insert("$even".to_string());
+        item_scope.insert("$odd".to_string());
 
         let clean_track = for_block_track_by_str(&for_block.track_by, &for_block.item_name);
         let track_fn = format!("({}, $index) => ({})", for_block.item_name, clean_track);
@@ -1546,6 +1551,11 @@ impl<'a> AstCodeGenerator<'a> {
             "ctx",
             "$event",
             "$index",
+            "$first",
+            "$last",
+            "$count",
+            "$even",
+            "$odd",
         ]
         .into_iter()
         .collect();
