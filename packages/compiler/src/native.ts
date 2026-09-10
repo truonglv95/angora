@@ -42,7 +42,26 @@ export function findRustCompilerBinary(): string {
     return cachedBinaryPath;
   }
 
-  // 2. Try resolving from platform-specific optional dependency (ESM & CommonJS)
+  // 2. Local build paths (monorepo development & CI fresh compilation)
+  const localCandidates = [
+    resolve(currentDir, `../../../target/release/${exeName}`),
+    resolve(currentDir, `../../target/release/${exeName}`),
+    resolve(process.cwd(), `target/release/${exeName}`),
+    resolve(process.cwd(), `../../target/release/${exeName}`),
+    resolve(process.cwd(), `../target/release/${exeName}`),
+    resolve(currentDir, `../../../target/debug/${exeName}`),
+    resolve(currentDir, `../../target/debug/${exeName}`),
+    resolve(process.cwd(), `target/debug/${exeName}`),
+  ].filter(Boolean) as string[];
+
+  for (const p of localCandidates) {
+    if (existsSync(p)) {
+      cachedBinaryPath = p;
+      return p;
+    }
+  }
+
+  // 3. Try resolving from platform-specific optional dependency (ESM & CommonJS production install)
   try {
     const pkgName = getPlatformPackageName();
     let pkgDir: string | null = null;
@@ -76,7 +95,7 @@ export function findRustCompilerBinary(): string {
     }
   } catch {}
 
-  // 3. Check node_modules in working directory
+  // 4. Check node_modules in working directory
   const nodeModulesCandidates = [
     resolve(process.cwd(), 'node_modules', getPlatformPackageName(), 'bin', exeName),
     resolve(process.cwd(), 'node_modules/.bin', exeName),
@@ -85,25 +104,6 @@ export function findRustCompilerBinary(): string {
     if (existsSync(cand)) {
       cachedBinaryPath = cand;
       return cand;
-    }
-  }
-
-  // 4. Fallback to local build paths (monorepo & development)
-  const candidates = [
-    resolve(currentDir, `../../target/release/${exeName}`),
-    resolve(currentDir, `../../../target/release/${exeName}`),
-    resolve(process.cwd(), `target/release/${exeName}`),
-    resolve(process.cwd(), `../../target/release/${exeName}`),
-    resolve(process.cwd(), `../target/release/${exeName}`),
-    resolve(currentDir, `../../target/debug/${exeName}`),
-    resolve(currentDir, `../../../target/debug/${exeName}`),
-    resolve(process.cwd(), `target/debug/${exeName}`),
-  ].filter(Boolean) as string[];
-
-  for (const p of candidates) {
-    if (existsSync(p)) {
-      cachedBinaryPath = p;
-      return p;
     }
   }
 

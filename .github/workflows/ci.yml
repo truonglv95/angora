@@ -29,8 +29,6 @@ jobs:
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: crates -> target
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -45,6 +43,8 @@ jobs:
     name: TypeScript Tests & Package Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: rust-tests
+    env:
+      ANGORA_OXC_BIN: ${{ github.workspace }}/target/release/angora_oxc
     strategy:
       fail-fast: false
       matrix:
@@ -58,8 +58,6 @@ jobs:
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: crates -> target
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
