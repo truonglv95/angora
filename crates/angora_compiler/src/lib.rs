@@ -6,6 +6,7 @@ pub mod constants;
 pub mod css;
 pub mod lsp;
 pub mod parser;
+pub mod sfc;
 pub mod ssr_codegen;
 pub mod tcb;
 pub mod transform;
@@ -18,6 +19,7 @@ pub use lsp::{
     LspTypeDefInfo, LspTypeMemberInfo,
 };
 pub use parser::parse_template;
+pub use sfc::{compile_sfc, parse_sfc, SfcBlock, SfcDescriptor};
 pub use ssr_codegen::compile_ssr_template;
 pub use tcb::{
     generate_tcb_from_source, generate_tcb_from_source_with_imports, generate_type_check_block,

@@ -6,6 +6,7 @@ import {
   type TsgoOptions,
 } from './tsgo.ts';
 import { OxcValidator, type OxcOptions } from './oxc.ts';
+import { compileSfc } from '@angora-js/compiler';
 
 export interface AngoraPluginOptions {
   /**
@@ -121,26 +122,31 @@ export function angora(options: AngoraPluginOptions = {}): Plugin {
         code.includes('@Pipe') ||
         code.includes('@Injectable');
 
-      const isAngoraFile = cleanId.match(/\.(ts|tsx|js|mjs)$/) && hasAngoraDecorator;
+      const isSfc = cleanId.endsWith('.angora') || cleanId.endsWith('.ag');
+      const isAngoraFile = (cleanId.match(/\.(ts|tsx|js|mjs)$/) && hasAngoraDecorator) || isSfc;
       if (!isAngoraFile) {
         return null;
       }
 
       let resultCode = '';
 
-      // 1. Try In-Process Native N-API Rust OXC transformer first (microseconds speed)
-      if (oxcValidator.isNative()) {
-        const nativeRes = oxcValidator.transformSourceSync(code);
-        if (nativeRes.success && nativeRes.code) {
-          resultCode = nativeRes.code;
+      if (isSfc) {
+        resultCode = compileSfc(code, { filename: cleanId });
+      } else {
+        // 1. Try In-Process Native N-API Rust OXC transformer first (microseconds speed)
+        if (oxcValidator.isNative()) {
+          const nativeRes = oxcValidator.transformSourceSync(code);
+          if (nativeRes.success && nativeRes.code) {
+            resultCode = nativeRes.code;
+          }
         }
-      }
 
-      // 2. Try native Rust OXC CLI AST transformer
-      if (!resultCode && oxcValidator.isAvailable()) {
-        const oxcResult = await oxcValidator.transformFile(cleanId);
-        if (oxcResult.success && oxcResult.code) {
-          resultCode = oxcResult.code;
+        // 2. Try native Rust OXC CLI AST transformer
+        if (!resultCode && oxcValidator.isAvailable()) {
+          const oxcResult = await oxcValidator.transformFile(cleanId);
+          if (oxcResult.success && oxcResult.code) {
+            resultCode = oxcResult.code;
+          }
         }
       }
 
@@ -186,7 +192,7 @@ if (import.meta.hot) {
     },
 
     async handleHotUpdate(ctx) {
-      if (ctx.file.endsWith('.angora') || ctx.file.endsWith('.ts')) {
+      if (ctx.file.endsWith('.angora') || ctx.file.endsWith('.ag') || ctx.file.endsWith('.ts')) {
         // Run TypeScript 7.0 native diagnostic in background on edit
         checker.check().then(result => {
           if (!result.success && server) {

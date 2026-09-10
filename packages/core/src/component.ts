@@ -33,6 +33,7 @@ export interface ComponentDef<T = any> {
   styles?: string[];
   scopeId?: string;
   render?: (ctx: any, injector: any) => Node[];
+  ssrRender?: (ctx: any, injector: any) => string;
   type: new (...args: any[]) => T;
   metadata: ComponentMetadata;
 }
@@ -41,6 +42,7 @@ export interface ComponentType<T = any> {
   new (...args: any[]): T;
   ɵcmp?: ComponentDef<T>;
   ɵrender?: (ctx: T, injector: any) => Node[];
+  ssrRender?: (ctx: T, injector: any) => string;
   __angora_render__?: (ctx: T, injector: any) => Node[];
   __angora_scope_id__?: string;
   __angora_styles__?: string[];
@@ -186,8 +188,11 @@ export interface FunctionalComponentOptions<T = any> {
   template: string;
   imports?: ComponentImports;
   styles?: string[];
+  scopeId?: string;
   providers?: Provider[];
   setup?: (ctx: any) => T | void;
+  render?: (ctx: any, injector: any) => Node[];
+  ssrRender?: (ctx: any, injector: any) => string;
 }
 
 export type ComponentFactoryFn<T = any> = () => T & {
@@ -252,16 +257,37 @@ export function component<T extends object = any>(
     }
   }
 
+  const isObj = typeof optionsOrFnOrTemplate === 'object' && optionsOrFnOrTemplate !== null;
+  const opts = isObj ? (optionsOrFnOrTemplate as any) : {};
+
   const def: ComponentDef<any> = {
     selector: metadata.selector || 'angora-component',
     imports: metadata.imports,
     styles: metadata.styles,
+    scopeId: opts.scopeId,
+    render: opts.render,
+    ssrRender: opts.ssrRender,
     type: FunctionalComponent as any,
     metadata,
   };
 
-  (FunctionalComponent as any)[COMPONENT_DEF] = def;
-  (FunctionalComponent as any).ɵcmp = def;
+  const compTarget = FunctionalComponent as unknown as ComponentType<any>;
+  compTarget[COMPONENT_DEF] = def;
+  compTarget.ɵcmp = def;
+
+  if (opts.render) {
+    compTarget.ɵrender = opts.render;
+    compTarget.__angora_render__ = opts.render;
+  }
+  if (opts.ssrRender) {
+    compTarget.ssrRender = opts.ssrRender;
+  }
+  if (opts.scopeId) {
+    compTarget.__angora_scope_id__ = opts.scopeId;
+  }
+  if (metadata.styles) {
+    compTarget.__angora_styles__ = metadata.styles;
+  }
 
   return FunctionalComponent as any;
 }

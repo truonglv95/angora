@@ -54,10 +54,15 @@ fn main() {
     let generate_tcb_mode = args.iter().any(|a| a == "--generate-tcb");
     let extract_tcbs_mode = args.iter().any(|a| a == "--extract-tcbs");
     let scope_css_mode = args.iter().any(|a| a == "--scope-css");
+    let compile_sfc_mode = args.iter().any(|a| a == "--compile-sfc");
     let lsp_analyze_mode = args.iter().any(|a| a == "--lsp-analyze");
     let file_uri = args
         .windows(2)
         .find(|w| w[0] == "--uri")
+        .map(|w| w[1].clone());
+    let file_arg = args
+        .windows(2)
+        .find(|w| w[0] == "--file" || w[0] == "--filename")
         .map(|w| w[1].clone());
     let class_name = args
         .windows(2)
@@ -306,6 +311,30 @@ fn main() {
         let ssr_fn = angora_compiler::compile_ssr_template(&ast, scope_id);
         print!("{}", ssr_fn);
         process::exit(0);
+    }
+
+    if compile_sfc_mode
+        || (transform_mode && (file_path.ends_with(".angora") || file_path.ends_with(".ag")))
+    {
+        let fpath = if file_path != "-" {
+            Some(file_path.as_str())
+        } else if let Some(ref f) = file_arg {
+            Some(f.as_str())
+        } else if class_name != "Component" {
+            Some(class_name.as_str())
+        } else {
+            None
+        };
+        match angora_compiler::compile_sfc(&source, fpath) {
+            Ok(transformed) => {
+                print!("{}", transformed);
+                process::exit(0);
+            }
+            Err(err) => {
+                eprintln!("SFC compile failed: {}", err);
+                process::exit(1);
+            }
+        }
     }
 
     if transform_mode {

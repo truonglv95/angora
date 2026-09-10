@@ -229,6 +229,30 @@ export function compileTemplate(
   return res.stdout;
 }
 
+/**
+ * Compiles an Angora Single-File Component (.angora) into an optimized JS module
+ * using 100% Native Rust compiler.
+ */
+export function compileSfc(sfcSource: string, options?: { filename?: string }): string {
+  const bin = findRustCompilerBinary();
+  const args = ['-', '--compile-sfc'];
+  if (options?.filename) {
+    args.push('--file', options.filename);
+  }
+
+  const res = spawnSync(bin, args, {
+    input: sfcSource,
+    encoding: 'utf-8',
+    maxBuffer: 50 * 1024 * 1024,
+  });
+
+  if (res.status !== 0) {
+    throw new Error(`[Angora Rust SFC Error]: ${res.stderr || res.stdout || 'Unknown failure'}`);
+  }
+
+  return res.stdout;
+}
+
 function normalizeAst(nodes: any[]): ASTNode[] {
   return nodes.map(n => {
     if (n.type === 'element') {

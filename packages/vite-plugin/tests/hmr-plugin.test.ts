@@ -105,4 +105,50 @@ export class CounterComponent {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test('should transform Single-File Component (.angora) file and inject HMR', async () => {
+    const plugin = angora({
+      hmr: true,
+      inspector: true,
+    });
+
+    if (typeof plugin.configResolved === 'function') {
+      (plugin.configResolved as any)({
+        command: 'serve',
+        mode: 'development',
+      });
+    }
+
+    const sfcCode = `
+<script>
+  import { signal } from '@angora-js/core';
+  const count = signal(10);
+</script>
+<template>
+  <button>Count: {{ count() }}</button>
+</template>
+<style scoped>
+  button { color: green; }
+</style>
+`;
+    const sfcFile = '/workspace/src/counter.angora';
+
+    if (typeof plugin.transform === 'function') {
+      const result: any = await (plugin.transform as any).call(
+        {
+          error(msg: string) {
+            throw new Error(msg);
+          },
+        },
+        sfcCode,
+        sfcFile
+      );
+
+      expect(result).not.toBeNull();
+      expect(result.code).toContain('component({');
+      expect(result.code).toContain('selector: "counter"');
+      expect(result.code).toContain('button[_angora-counter]');
+      expect(result.code).toContain('import.meta.hot.accept');
+    }
+  });
 });

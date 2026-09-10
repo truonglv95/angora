@@ -101,4 +101,54 @@ describe('@angora-js/server - Streaming SSR & Event Replay Engine', () => {
     expect(clickCount).toBe(2);
     expect((window as any).__ANGORA_EVENTS__.length).toBe(0);
   });
+
+  test('should use pure string SSR in renderToWebStream when ssrRender is present', async () => {
+    class FastApp {
+      static ɵcmp = {
+        scopeId: 'ag-fast',
+        styles: ['.fast { color: red; }'],
+        ssrRender: (ctx: any) => `<div class="fast">Pure String Stream</div>`,
+      };
+    }
+
+    const stream = renderToWebStream(FastApp);
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let html = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value);
+    }
+
+    expect(html).toContain('Pure String Stream');
+    expect(html).toContain(
+      '<style id="angora-style-ag-fast" data-angora-scope="ag-fast">.fast { color: red; }</style>'
+    );
+    expect(html).toContain(EVENT_REPLAY_SCRIPT);
+  });
+
+  test('should render to Node.js Readable stream with renderToNodeStream', async () => {
+    const { renderToNodeStream } = await import('../src/index.ts');
+
+    class NodeApp {
+      static ɵcmp = {
+        ssrRender: () => `<h1>Node Streamed</h1>`,
+      };
+    }
+
+    const nodeStream = renderToNodeStream(NodeApp);
+    let result = '';
+
+    await new Promise<void>((resolve, reject) => {
+      nodeStream.on('data', (chunk: any) => {
+        result += chunk.toString();
+      });
+      nodeStream.on('end', () => resolve());
+      nodeStream.on('error', reject);
+    });
+
+    expect(result).toContain('<h1>Node Streamed</h1>');
+  });
 });
