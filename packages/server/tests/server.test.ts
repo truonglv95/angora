@@ -136,4 +136,49 @@ describe('@angora-js/server - SSR & Hydration Engine', () => {
       (globalThis as any).document = prevDoc;
     }
   });
+
+  test('should support hydrateIsland with different triggers (load, idle, event)', async () => {
+    const { hydrateIsland } = await import('../src/index.ts');
+    const window = new Window();
+    const prevDoc = (globalThis as any).document;
+    const prevWin = (globalThis as any).window;
+    (globalThis as any).document = window.document;
+    (globalThis as any).window = window;
+
+    try {
+      @Component({
+        selector: 'island-widget',
+        template: '<button id="island-btn">Interactive Island</button>',
+      })
+      class IslandWidget {
+        clicked = signal(false);
+      }
+
+      // 1. Immediate 'load' strategy
+      const c1 = window.document.createElement('div');
+      c1.id = 'island-1';
+      window.document.body.appendChild(c1);
+      const app1 = await hydrateIsland(IslandWidget, c1 as any, 'load');
+      expect(app1).toBeInstanceOf(IslandWidget);
+
+      // 2. 'idle' strategy
+      const c2 = window.document.createElement('div');
+      c2.id = 'island-2';
+      window.document.body.appendChild(c2);
+      const app2 = await hydrateIsland(IslandWidget, c2 as any, 'idle');
+      expect(app2).toBeInstanceOf(IslandWidget);
+
+      // 3. User interaction event trigger
+      const c3 = window.document.createElement('div');
+      c3.id = 'island-3';
+      window.document.body.appendChild(c3);
+      const p3 = hydrateIsland(IslandWidget, c3 as any, { event: 'click' });
+      c3.dispatchEvent(new (window as any).Event('click'));
+      const app3 = await p3;
+      expect(app3).toBeInstanceOf(IslandWidget);
+    } finally {
+      (globalThis as any).document = prevDoc;
+      (globalThis as any).window = prevWin;
+    }
+  });
 });

@@ -23,6 +23,7 @@ export * from './error-boundary.ts';
 export * from './devtools.ts';
 export * from './inspector.ts';
 export * from './hmr.ts';
+export { COMPONENT_DEF } from '@angora-js/core';
 
 const runtimeScope = {
   ...domExports,

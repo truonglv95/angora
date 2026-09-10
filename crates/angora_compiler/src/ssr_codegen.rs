@@ -162,7 +162,7 @@ impl SsrCodeGenerator {
             if let Some(dcp) = dynamic_class_prop {
                 let expr = self.prefix_ctx(&dcp.expression, scope_vars);
                 stmts.push(format!(
-                    "const _dyn_cls = {}; if (_dyn_cls) {{ if (typeof _dyn_cls === 'string') {}.push(_dyn_cls); else if (Array.isArray(_dyn_cls)) {}.push(..._dyn_cls); else for (const [k, v] of Object.entries(_dyn_cls)) if (v) {}.push(k); }}",
+                    "{{ const _dyn_cls = {}; if (_dyn_cls) {{ if (typeof _dyn_cls === 'string') {}.push(_dyn_cls); else if (Array.isArray(_dyn_cls)) {}.push(..._dyn_cls); else for (const [k, v] of Object.entries(_dyn_cls)) if (v) {}.push(k); }} }}",
                     expr, class_arr_var, class_arr_var, class_arr_var
                 ));
             }
@@ -212,7 +212,7 @@ impl SsrCodeGenerator {
             if let Some(dsp) = dynamic_style_prop {
                 let expr = self.prefix_ctx(&dsp.expression, scope_vars);
                 stmts.push(format!(
-                    "const _dyn_sty = {}; if (_dyn_sty) {{ if (typeof _dyn_sty === 'string') {}.push(_dyn_sty); else for (const [k, v] of Object.entries(_dyn_sty)) if (v != null) {}.push(k + ': ' + v); }}",
+                    "{{ const _dyn_sty = {}; if (_dyn_sty) {{ if (typeof _dyn_sty === 'string') {}.push(_dyn_sty); else for (const [k, v] of Object.entries(_dyn_sty)) if (v != null) {}.push(k + ': ' + v); }} }}",
                     expr, style_arr_var, style_arr_var
                 ));
             }
@@ -221,7 +221,7 @@ impl SsrCodeGenerator {
                 let style_name = &sp.name["style.".len()..];
                 let expr = self.prefix_ctx(&sp.expression, scope_vars);
                 stmts.push(format!(
-                    "const _sval = {}; if (_sval != null) {}.push('{}: ' + _sval);",
+                    "{{ const _sval = {}; if (_sval != null) {}.push('{}: ' + _sval); }}",
                     expr, style_arr_var, style_name
                 ));
             }
@@ -257,7 +257,7 @@ impl SsrCodeGenerator {
                 stmts.push(format!("if ({}) __out.push(' {}');", expr, attr_name));
             } else {
                 stmts.push(format!(
-                    "const _pval = {}; if (_pval != null && _pval !== false) __out.push(' {}=\"' + __escape(_pval) + '\"');",
+                    "{{ const _pval = {}; if (_pval != null && _pval !== false) __out.push(' {}=\"' + __escape(_pval) + '\"'); }}",
                     expr, attr_name
                 ));
             }
@@ -267,7 +267,7 @@ impl SsrCodeGenerator {
         for two_way in &el.two_ways {
             let expr = self.prefix_ctx(&two_way.expression, scope_vars);
             stmts.push(format!(
-                "const _twval = {}; if (_twval != null) __out.push(' value=\"' + __escape(_twval) + '\"');",
+                "{{ const _twval = {}; if (_twval != null) __out.push(' value=\"' + __escape(_twval) + '\"'); }}",
                 expr
             ));
         }

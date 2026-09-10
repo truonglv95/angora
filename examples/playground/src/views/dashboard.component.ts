@@ -1,6 +1,7 @@
 import { Component, signal, computed, linkedSignal, signalStore } from '@angora-js/core';
 import { toSignal } from '@angora-js/rxjs-interop';
 import { TodoItemComponent, type Todo } from '../todo-item.component.ts';
+import CounterSfc from '../counter-sfc.angora';
 
 // Simulated RxJS-compatible stream (Observables / Subscribable)
 const liveStream$ = {
@@ -20,7 +21,7 @@ const liveStream$ = {
 
 @Component({
   selector: 'app-dashboard',
-  imports: [TodoItemComponent],
+  imports: [TodoItemComponent, CounterSfc],
   template: `
     <div class="dashboard-view">
       <!-- Welcome Hero Banner -->
@@ -152,6 +153,9 @@ const liveStream$ = {
           </div>
         </div>
       </div>
+
+      <!-- Single-File Component (.angora) Showcase -->
+      <counter-sfc></counter-sfc>
 
       <!-- Keyed Reconciliation List -->
       <div class="panel-card">

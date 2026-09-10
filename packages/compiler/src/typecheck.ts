@@ -193,6 +193,14 @@ export function buildTcbWorkspace(
   }
   fs.mkdirSync(tcbDir, { recursive: true });
 
+  // Provide global type shims for SFC (.angora / .ag) files in shadow workspace
+  const shimPath = path.join(tcbDir, 'angora-sfc-shim.d.ts');
+  fs.writeFileSync(
+    shimPath,
+    `declare module '*.angora' {\n  const component: any;\n  export default component;\n}\ndeclare module '*.ag' {\n  const component: any;\n  export default component;\n}\n`,
+    'utf-8'
+  );
+
   const componentFiles = findComponentFiles(rootDir);
   const shadowFiles = new Map<string, ComponentTcbInfo>();
 

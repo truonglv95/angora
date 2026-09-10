@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="@angora-js/vite-plugin/client" />
 
 declare module '*.scss' {
   const content: string;
