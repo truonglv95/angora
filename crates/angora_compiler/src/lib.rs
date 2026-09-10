@@ -5,15 +5,18 @@ pub mod ast_builder_utils;
 pub mod codegen;
 pub mod constants;
 pub mod css;
+pub mod lexer;
 pub mod lsp;
 pub mod parser;
 pub mod sfc;
 pub mod ssr_codegen;
 pub mod tcb;
+pub mod token;
 pub mod transform;
 
 pub use ast::*;
 pub use codegen::{compile_template, compile_template_with_scope};
+pub use lexer::Lexer;
 pub use lsp::{
     analyze_components_lsp, analyze_single_file_lsp, LspAnalysisResult, LspComponentAnalysis,
     LspImportInfo, LspMethodInfo, LspPosition, LspPropertyInfo, LspRange, LspTemplateInfo,
@@ -26,6 +29,7 @@ pub use tcb::{
     generate_tcb_from_source, generate_tcb_from_source_with_imports, generate_type_check_block,
     generate_type_check_block_with_imports, SourceMapping, TcbResult,
 };
+pub use token::{ControlFlowKeyword, Token, TokenKind};
 pub use transform::{transform_component, transform_component_with_path};
 
 use oxc_allocator::Allocator;
