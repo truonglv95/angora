@@ -488,7 +488,8 @@ fn extract_entity_metadata<'a>(
                                         && !val.contains('<')
                                         && !val.contains('\n')
                                     {
-                                        if let Some(content) = resolve_file_content(val, file_path) {
+                                        if let Some(content) = resolve_file_content(val, file_path)
+                                        {
                                             template = Some(content);
                                         } else {
                                             template = Some(val.to_string());
@@ -498,17 +499,15 @@ fn extract_entity_metadata<'a>(
                                     }
                                 }
                                 Some(oxc_ast::ast::Expression::TemplateLiteral(lit)) => {
-                                    let s: String = lit
-                                        .quasis
-                                        .iter()
-                                        .map(|q| q.value.raw.as_str())
-                                        .collect();
+                                    let s: String =
+                                        lit.quasis.iter().map(|q| q.value.raw.as_str()).collect();
                                     let val = s.as_str();
                                     if (val.ends_with(".html") || val.ends_with(".htm"))
                                         && !val.contains('<')
                                         && !val.contains('\n')
                                     {
-                                        if let Some(content) = resolve_file_content(val, file_path) {
+                                        if let Some(content) = resolve_file_content(val, file_path)
+                                        {
                                             template = Some(content);
                                         } else {
                                             template = Some(s);
@@ -517,7 +516,9 @@ fn extract_entity_metadata<'a>(
                                         template = Some(s);
                                     }
                                 }
-                                Some(oxc_ast::ast::Expression::TaggedTemplateExpression(tagged)) => {
+                                Some(oxc_ast::ast::Expression::TaggedTemplateExpression(
+                                    tagged,
+                                )) => {
                                     let s: String = tagged
                                         .quasi
                                         .quasis
@@ -538,17 +539,15 @@ fn extract_entity_metadata<'a>(
                             );
                         }
 
-                        let final_selector =
-                            selector.unwrap_or_else(|| to_kebab_case(&class_name));
+                        let final_selector = selector.unwrap_or_else(|| to_kebab_case(&class_name));
                         if let Some(tmpl) = template {
-                            entity =
-                                Some(TransformedEntity::Component(ComponentMetadata {
-                                    class_name: class_name.clone(),
-                                    selector: final_selector,
-                                    imports_str,
-                                    styles_raw,
-                                    template: tmpl,
-                                }));
+                            entity = Some(TransformedEntity::Component(ComponentMetadata {
+                                class_name: class_name.clone(),
+                                selector: final_selector,
+                                imports_str,
+                                styles_raw,
+                                template: tmpl,
+                            }));
                             break;
                         }
                     }

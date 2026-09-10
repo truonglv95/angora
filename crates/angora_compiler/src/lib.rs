@@ -414,7 +414,13 @@ mod tests {
         assert!(!result2.contains("@Component"));
 
         // 3. Convention-based discovery: @Component() with file_path
-        let temp_dir = std::env::temp_dir().join(format!("angora_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "angora_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         std::fs::create_dir_all(&temp_dir).unwrap();
         let ts_file = temp_dir.join("profile.component.ts");
         let html_file = temp_dir.join("profile.component.html");
@@ -429,7 +435,8 @@ mod tests {
             @Component()
             export class ProfileComponent {}
         "#;
-        let result3 = transform_component_with_path(source3, Some(ts_file.to_str().unwrap())).expect("Transform convention failed");
+        let result3 = transform_component_with_path(source3, Some(ts_file.to_str().unwrap()))
+            .expect("Transform convention failed");
         assert!(result3.contains("static ɵcmp"));
         assert!(result3.contains("Profile</h1>"));
         assert!(result3.contains("color: red"));
@@ -439,4 +446,3 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
-
