@@ -78,6 +78,7 @@ function updatePackages() {
     const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
     const name = pkg.name;
 
+    pkg.version = currentVersion;
     pkg.description = PKG_DESCRIPTIONS[name] || pkg.description || 'Angora Framework package';
     pkg.author = COMMON_METADATA.author;
     pkg.license = COMMON_METADATA.license;

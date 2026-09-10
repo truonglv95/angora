@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/rxjs-interop",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Bidirectional reactive adapters between RxJS Observables and Angora Signals",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

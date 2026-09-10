@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/eslint-plugin",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Official ESLint plugin with rules for Angora signals, effects, and template imports",
   "type": "module",
   "main": "./dist/index.js",

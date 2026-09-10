@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/devtools",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Official Chrome DevTools browser extension and state inspector for Angora",
   "type": "module",
   "main": "./dist/index.js",

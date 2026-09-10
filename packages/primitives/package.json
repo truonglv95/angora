@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/primitives",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Accessible WAI-ARIA 1.2 headless UI primitives and O(1) 100k-row virtual scrolling engine",
   "type": "module",
   "main": "./dist/index.js",

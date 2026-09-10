@@ -1,6 +1,6 @@
 {
   "name": "create-angora",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Official project scaffolding CLI for creating new Angora applications in seconds",
   "type": "module",
   "bin": {

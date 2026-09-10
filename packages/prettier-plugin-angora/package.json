@@ -1,6 +1,6 @@
 {
   "name": "@angora-js/prettier-plugin",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Official Prettier plugin for inline component templates and modern control flow in Angora",
   "type": "module",
   "main": "./dist/index.js",
