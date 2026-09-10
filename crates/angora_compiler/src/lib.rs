@@ -16,7 +16,7 @@ pub mod transform;
 
 pub use ast::*;
 pub use codegen::{compile_template, compile_template_with_scope};
-pub use lexer::Lexer;
+pub use lexer::{Lexer, TokenStream};
 pub use lsp::{
     analyze_components_lsp, analyze_single_file_lsp, LspAnalysisResult, LspComponentAnalysis,
     LspImportInfo, LspMethodInfo, LspPosition, LspPropertyInfo, LspRange, LspTemplateInfo,

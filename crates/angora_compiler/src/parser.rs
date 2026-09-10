@@ -1,4 +1,6 @@
 use crate::ast::*;
+use crate::lexer::TokenStream;
+use crate::token::{ControlFlowKeyword, Token, TokenKind};
 
 pub fn is_void_element(name: &str) -> bool {
     matches!(
@@ -21,188 +23,113 @@ pub fn is_void_element(name: &str) -> bool {
 }
 
 pub struct TemplateParser<'a> {
-    input: &'a str,
-    pos: usize,
+    stream: TokenStream<'a>,
 }
 
 impl<'a> TemplateParser<'a> {
     pub fn new(input: &'a str) -> Self {
-        Self { input, pos: 0 }
-    }
-
-    fn is_eof(&self) -> bool {
-        self.pos >= self.input.len()
-    }
-
-    fn current_slice(&self) -> &'a str {
-        if self.is_eof() {
-            ""
-        } else {
-            &self.input[self.pos..]
-        }
-    }
-
-    fn starts_with(&self, s: &str) -> bool {
-        self.current_slice().starts_with(s)
-    }
-
-    fn skip_whitespace(&mut self) {
-        while !self.is_eof() {
-            let ch = self.input[self.pos..].chars().next().unwrap();
-            if ch.is_whitespace() {
-                self.pos += ch.len_utf8();
-            } else {
-                break;
-            }
+        Self {
+            stream: TokenStream::from_input(input),
         }
     }
 
     pub fn parse(&mut self) -> Vec<TemplateNode> {
         let mut nodes = Vec::new();
-        while !self.is_eof() {
-            self.skip_whitespace();
-            if self.is_eof() {
+        while !self.stream.is_eof() {
+            if matches!(
+                self.stream.peek_kind(),
+                Some(TokenKind::CloseBrace) | Some(TokenKind::TagCloseStart)
+            ) {
                 break;
             }
 
-            if self.starts_with("}") || self.starts_with("</") {
-                break;
-            }
-
+            let start_pos = self.stream.pos();
             if let Some(node) = self.parse_node() {
                 nodes.push(node);
+            }
+            if self.stream.pos() == start_pos {
+                if !self.stream.is_eof() {
+                    self.stream.bump();
+                } else {
+                    break;
+                }
             }
         }
         nodes
     }
 
-    fn is_control_flow(&self, keyword: &str) -> bool {
-        if self.starts_with(keyword) {
-            let after = &self.input[self.pos + keyword.len()..];
-            let trimmed = after.trim_start();
-            trimmed.starts_with('(') || (keyword == "@defer" && trimmed.starts_with('{'))
-        } else {
-            false
-        }
-    }
-
     fn parse_node(&mut self) -> Option<TemplateNode> {
-        self.skip_whitespace();
-        if self.is_eof() || self.starts_with("}") || self.starts_with("</") {
+        if self.stream.is_eof() {
             return None;
         }
 
-        if self.is_control_flow("@if") {
-            return Some(TemplateNode::IfBlock(self.parse_if_block()));
-        }
-        if self.is_control_flow("@for") {
-            return Some(TemplateNode::ForBlock(self.parse_for_block()));
-        }
-        if self.is_control_flow("@switch") {
-            return Some(TemplateNode::SwitchBlock(self.parse_switch_block()));
-        }
-        if self.is_control_flow("@defer") {
-            return Some(TemplateNode::DeferBlock(self.parse_defer_block()));
-        }
-        if self.starts_with("{{") {
-            return Some(TemplateNode::Interpolation(self.parse_interpolation()));
-        }
-        if self.starts_with("<") {
-            return self.parse_element().map(TemplateNode::Element);
-        }
-
-        self.parse_text().map(TemplateNode::Text)
-    }
-
-    fn parse_parenthesized_expr_with_span(&mut self) -> (String, SourceSpan) {
-        self.skip_whitespace();
-        if !self.starts_with("(") {
-            return (
-                String::new(),
-                SourceSpan {
-                    start: self.pos,
-                    end: self.pos,
-                },
-            );
-        }
-        self.pos += 1; // skip '('
-
-        let mut depth = 1;
-        let mut in_quote: Option<char> = None;
-        let start = self.pos;
-
-        while !self.is_eof() && depth > 0 {
-            let ch = self.input[self.pos..].chars().next().unwrap();
-            let prev = if self.pos > start {
-                self.input[..self.pos].chars().last()
-            } else {
-                None
-            };
-
-            if let Some(q) = in_quote {
-                if ch == q && prev != Some('\\') {
-                    in_quote = None;
-                }
-            } else if ch == '\'' || ch == '"' || ch == '`' {
-                in_quote = Some(ch);
-            } else if ch == '(' {
-                depth += 1;
-            } else if ch == ')' {
-                depth -= 1;
-                if depth == 0 {
-                    let raw = &self.input[start..self.pos];
-                    let expr = raw.trim().to_string();
-                    let leading = raw.len() - raw.trim_start().len();
-                    let span = SourceSpan {
-                        start: start + leading,
-                        end: start + leading + expr.len(),
-                    };
-                    self.pos += 1;
-                    return (expr, span);
-                }
+        match self.stream.peek_kind()? {
+            TokenKind::CloseBrace | TokenKind::TagCloseStart => None,
+            TokenKind::ControlFlow(ControlFlowKeyword::If) => {
+                Some(TemplateNode::IfBlock(self.parse_if_block()))
             }
-            self.pos += ch.len_utf8();
+            TokenKind::ControlFlow(ControlFlowKeyword::For) => {
+                Some(TemplateNode::ForBlock(self.parse_for_block()))
+            }
+            TokenKind::ControlFlow(ControlFlowKeyword::Switch) => {
+                Some(TemplateNode::SwitchBlock(self.parse_switch_block()))
+            }
+            TokenKind::ControlFlow(ControlFlowKeyword::Defer) => {
+                Some(TemplateNode::DeferBlock(self.parse_defer_block()))
+            }
+            TokenKind::Interpolation(_) => {
+                Some(TemplateNode::Interpolation(self.parse_interpolation()))
+            }
+            TokenKind::TagOpenStart => self.parse_element().map(TemplateNode::Element),
+            TokenKind::Comment(_) => {
+                self.stream.bump();
+                None
+            }
+            TokenKind::Text(_) => self.parse_text().map(TemplateNode::Text),
+            _ => None,
         }
-
-        let raw = &self.input[start..self.pos];
-        let expr = raw.trim().to_string();
-        let leading = raw.len() - raw.trim_start().len();
-        let span = SourceSpan {
-            start: start + leading,
-            end: start + leading + expr.len(),
-        };
-        if self.starts_with(")") {
-            self.pos += 1;
-        }
-        (expr, span)
     }
 
-    fn parse_parenthesized_expr(&mut self) -> String {
-        self.parse_parenthesized_expr_with_span().0
+    fn consume_expression(&mut self) -> (String, SourceSpan) {
+        if let Some(tok) = self.stream.peek() {
+            if let TokenKind::Expression(expr) = tok.kind {
+                let span = tok.span.clone();
+                let expr_str = expr.to_string();
+                self.stream.bump();
+                return (expr_str, span);
+            }
+        }
+        (
+            String::new(),
+            SourceSpan {
+                start: self.stream.peek().map(|t| t.span.start).unwrap_or(0),
+                end: self.stream.peek().map(|t| t.span.start).unwrap_or(0),
+            },
+        )
     }
 
     fn parse_block(&mut self) -> Vec<TemplateNode> {
-        self.skip_whitespace();
-        if !self.starts_with("{") {
+        if let Some(TokenKind::OpenBrace) = self.stream.peek_kind() {
+            self.stream.bump(); // skip '{'
+        } else {
             return Vec::new();
         }
-        self.pos += 1; // skip '{'
 
         let mut nodes = Vec::new();
-        while !self.is_eof() {
-            self.skip_whitespace();
-            if self.starts_with("}") {
-                self.pos += 1;
+        while !self.stream.is_eof() {
+            if let Some(TokenKind::CloseBrace) = self.stream.peek_kind() {
+                self.stream.bump(); // skip '}'
                 break;
             }
-            let start_pos = self.pos;
+            let start_pos = self.stream.pos();
             if let Some(node) = self.parse_node() {
                 nodes.push(node);
             }
-            if self.pos == start_pos {
-                if !self.is_eof() {
-                    let ch = self.input[self.pos..].chars().next().unwrap();
-                    self.pos += ch.len_utf8();
+            if self.stream.pos() == start_pos {
+                if !self.stream.is_eof() {
+                    self.stream.bump();
+                } else {
+                    break;
                 }
             }
         }
@@ -210,10 +137,9 @@ impl<'a> TemplateParser<'a> {
     }
 
     fn parse_if_block(&mut self) -> IfBlockNode {
-        self.pos += 3; // skip '@if'
-        self.skip_whitespace();
+        self.stream.bump(); // skip '@if'
 
-        let (condition, cond_span) = self.parse_parenthesized_expr_with_span();
+        let (condition, cond_span) = self.consume_expression();
         let children = self.parse_block();
 
         let mut branches = vec![IfBranch {
@@ -222,23 +148,20 @@ impl<'a> TemplateParser<'a> {
             span: Some(cond_span),
         }];
 
-        self.skip_whitespace();
-        while self.starts_with("@else if") {
-            self.pos += 8; // skip '@else if'
-            self.skip_whitespace();
-            let (next_cond, next_span) = self.parse_parenthesized_expr_with_span();
+        while let Some(TokenKind::ControlFlow(ControlFlowKeyword::ElseIf)) = self.stream.peek_kind()
+        {
+            self.stream.bump(); // skip '@else if'
+            let (next_cond, next_span) = self.consume_expression();
             let next_children = self.parse_block();
             branches.push(IfBranch {
                 condition: Some(next_cond),
                 children: next_children,
                 span: Some(next_span),
             });
-            self.skip_whitespace();
         }
 
-        if self.starts_with("@else") {
-            self.pos += 5; // skip '@else'
-            self.skip_whitespace();
+        if let Some(TokenKind::ControlFlow(ControlFlowKeyword::Else)) = self.stream.peek_kind() {
+            self.stream.bump(); // skip '@else'
             let else_children = self.parse_block();
             branches.push(IfBranch {
                 condition: None,
@@ -251,17 +174,14 @@ impl<'a> TemplateParser<'a> {
     }
 
     fn parse_for_block(&mut self) -> ForBlockNode {
-        self.pos += 4; // skip '@for'
-        self.skip_whitespace();
+        self.stream.bump(); // skip '@for'
 
-        let (header, header_span) = self.parse_parenthesized_expr_with_span(); // e.g. "item of items(); track item.id"
+        let (header, header_span) = self.consume_expression();
         let children = self.parse_block();
 
-        self.skip_whitespace();
         let mut empty_block = None;
-        if self.starts_with("@empty") {
-            self.pos += 6; // skip '@empty'
-            self.skip_whitespace();
+        if let Some(TokenKind::ControlFlow(ControlFlowKeyword::Empty)) = self.stream.peek_kind() {
+            self.stream.bump(); // skip '@empty'
             empty_block = Some(self.parse_block());
         }
 
@@ -313,29 +233,28 @@ impl<'a> TemplateParser<'a> {
     }
 
     fn parse_switch_block(&mut self) -> SwitchBlockNode {
-        self.pos += 7; // skip '@switch'
-        self.skip_whitespace();
+        self.stream.bump(); // skip '@switch'
 
-        let (expression, expr_span) = self.parse_parenthesized_expr_with_span();
-        self.skip_whitespace();
+        let (expression, expr_span) = self.consume_expression();
 
         let mut cases = Vec::new();
-        if self.starts_with("{") {
-            self.pos += 1;
-            while !self.is_eof() {
-                self.skip_whitespace();
-                if self.starts_with("}") {
-                    self.pos += 1;
+        if let Some(TokenKind::OpenBrace) = self.stream.peek_kind() {
+            self.stream.bump(); // skip '{'
+            while !self.stream.is_eof() {
+                if let Some(TokenKind::CloseBrace) = self.stream.peek_kind() {
+                    self.stream.bump(); // skip '}'
                     break;
                 }
 
-                if self.starts_with("@case") {
+                if let Some(TokenKind::ControlFlow(ControlFlowKeyword::Case)) =
+                    self.stream.peek_kind()
+                {
                     let mut case_values = Vec::new();
-                    while self.starts_with("@case") {
-                        self.pos += 5; // skip '@case'
-                        self.skip_whitespace();
-                        let (val, case_span) = self.parse_parenthesized_expr_with_span();
-                        self.skip_whitespace();
+                    while let Some(TokenKind::ControlFlow(ControlFlowKeyword::Case)) =
+                        self.stream.peek_kind()
+                    {
+                        self.stream.bump(); // skip '@case'
+                        let (val, case_span) = self.consume_expression();
                         for single_val in split_case_values(&val) {
                             case_values.push((single_val, case_span.clone()));
                         }
@@ -348,8 +267,10 @@ impl<'a> TemplateParser<'a> {
                             span: Some(span),
                         });
                     }
-                } else if self.starts_with("@default") {
-                    self.pos += 8; // skip '@default'
+                } else if let Some(TokenKind::ControlFlow(ControlFlowKeyword::Default)) =
+                    self.stream.peek_kind()
+                {
+                    self.stream.bump(); // skip '@default'
                     let children = self.parse_block();
                     cases.push(SwitchCase {
                         case_value: None,
@@ -357,8 +278,7 @@ impl<'a> TemplateParser<'a> {
                         span: None,
                     });
                 } else {
-                    let ch = self.input[self.pos..].chars().next().unwrap();
-                    self.pos += ch.len_utf8();
+                    self.stream.bump();
                 }
             }
         }
@@ -371,12 +291,11 @@ impl<'a> TemplateParser<'a> {
     }
 
     fn parse_defer_block(&mut self) -> DeferBlockNode {
-        self.pos += 6; // skip '@defer'
-        self.skip_whitespace();
+        self.stream.bump(); // skip '@defer'
 
         let mut triggers = Vec::new();
-        if self.starts_with("(") {
-            let trigger_expr = self.parse_parenthesized_expr();
+        if let Some(TokenKind::Expression(_)) = self.stream.peek_kind() {
+            let (trigger_expr, _) = self.consume_expression();
             for part in trigger_expr.split(';') {
                 let part = part.trim();
                 if let Some(when_cond) = part.strip_prefix("when ") {
@@ -414,67 +333,64 @@ impl<'a> TemplateParser<'a> {
         let mut loading_block = None;
         let mut error_block = None;
 
-        self.skip_whitespace();
-        while self.starts_with("@placeholder")
-            || self.starts_with("@loading")
-            || self.starts_with("@error")
-        {
-            if self.starts_with("@placeholder") {
-                self.pos += 12; // skip '@placeholder'
-                self.skip_whitespace();
-                let mut minimum = None;
-                if self.starts_with("(") {
-                    let expr = self.parse_parenthesized_expr();
-                    if let Some(idx) = expr.find("minimum") {
-                        let after = expr[idx + 7..].trim();
-                        let num_str: String =
-                            after.chars().take_while(|c| c.is_ascii_digit()).collect();
-                        if let Ok(n) = num_str.parse() {
-                            minimum = Some(n);
+        while let Some(TokenKind::ControlFlow(kw)) = self.stream.peek_kind() {
+            match kw {
+                ControlFlowKeyword::Placeholder => {
+                    self.stream.bump();
+                    let mut minimum = None;
+                    if let Some(TokenKind::Expression(_)) = self.stream.peek_kind() {
+                        let (expr, _) = self.consume_expression();
+                        if let Some(idx) = expr.find("minimum") {
+                            let after = expr[idx + 7..].trim();
+                            let num_str: String =
+                                after.chars().take_while(|c| c.is_ascii_digit()).collect();
+                            if let Ok(n) = num_str.parse() {
+                                minimum = Some(n);
+                            }
                         }
                     }
+                    let children = self.parse_block();
+                    placeholder_block = Some(PlaceholderBlock { children, minimum });
                 }
-                let children = self.parse_block();
-                placeholder_block = Some(PlaceholderBlock { children, minimum });
-            } else if self.starts_with("@loading") {
-                self.pos += 8; // skip '@loading'
-                self.skip_whitespace();
-                let mut after = None;
-                let mut minimum = None;
-                if self.starts_with("(") {
-                    let expr = self.parse_parenthesized_expr();
-                    if let Some(idx) = expr.find("after") {
-                        let aft = expr[idx + 5..].trim();
-                        let num_str: String =
-                            aft.chars().take_while(|c| c.is_ascii_digit()).collect();
-                        if let Ok(n) = num_str.parse() {
-                            after = Some(n);
+                ControlFlowKeyword::Loading => {
+                    self.stream.bump();
+                    let mut after = None;
+                    let mut minimum = None;
+                    if let Some(TokenKind::Expression(_)) = self.stream.peek_kind() {
+                        let (expr, _) = self.consume_expression();
+                        if let Some(idx) = expr.find("after") {
+                            let aft = expr[idx + 5..].trim();
+                            let num_str: String =
+                                aft.chars().take_while(|c| c.is_ascii_digit()).collect();
+                            if let Ok(n) = num_str.parse() {
+                                after = Some(n);
+                            }
+                        }
+                        if let Some(idx) = expr.find("minimum") {
+                            let min_part = expr[idx + 7..].trim();
+                            let num_str: String = min_part
+                                .chars()
+                                .take_while(|c| c.is_ascii_digit())
+                                .collect();
+                            if let Ok(n) = num_str.parse() {
+                                minimum = Some(n);
+                            }
                         }
                     }
-                    if let Some(idx) = expr.find("minimum") {
-                        let min_part = expr[idx + 7..].trim();
-                        let num_str: String = min_part
-                            .chars()
-                            .take_while(|c| c.is_ascii_digit())
-                            .collect();
-                        if let Ok(n) = num_str.parse() {
-                            minimum = Some(n);
-                        }
-                    }
+                    let children = self.parse_block();
+                    loading_block = Some(LoadingBlock {
+                        children,
+                        after,
+                        minimum,
+                    });
                 }
-                let children = self.parse_block();
-                loading_block = Some(LoadingBlock {
-                    children,
-                    after,
-                    minimum,
-                });
-            } else if self.starts_with("@error") {
-                self.pos += 6; // skip '@error'
-                self.skip_whitespace();
-                let children = self.parse_block();
-                error_block = Some(ErrorBlock { children });
+                ControlFlowKeyword::Error => {
+                    self.stream.bump();
+                    let children = self.parse_block();
+                    error_block = Some(ErrorBlock { children });
+                }
+                _ => break,
             }
-            self.skip_whitespace();
         }
 
         DeferBlockNode {
@@ -487,54 +403,88 @@ impl<'a> TemplateParser<'a> {
     }
 
     fn parse_interpolation(&mut self) -> InterpolationNode {
-        self.pos += 2; // skip '{{'
-        let end = match self.input[self.pos..].find("}}") {
-            Some(idx) => self.pos + idx,
-            None => self.input.len(),
-        };
+        if let Some(tok) = self.stream.bump() {
+            if let TokenKind::Interpolation(expr) = tok.kind {
+                return InterpolationNode {
+                    expression: expr.to_string(),
+                    span: Some(tok.span),
+                };
+            }
+        }
+        InterpolationNode {
+            expression: String::new(),
+            span: None,
+        }
+    }
 
-        let raw = &self.input[self.pos..end];
-        let expression = raw.trim().to_string();
-        let leading = raw.len() - raw.trim_start().len();
-        let span = Some(SourceSpan {
-            start: self.pos + leading,
-            end: self.pos + leading + expression.len(),
-        });
-        self.pos = if end < self.input.len() { end + 2 } else { end };
-        InterpolationNode { expression, span }
+    fn parse_text(&mut self) -> Option<TextNode> {
+        if let Some(tok) = self.stream.bump() {
+            if let TokenKind::Text(txt) = tok.kind {
+                let decoded = decode_html_entities(txt);
+                if decoded.is_empty() {
+                    None
+                } else {
+                    Some(TextNode { value: decoded })
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn consume_attr_value(&mut self) -> (String, Option<SourceSpan>) {
+        if let Some(TokenKind::Equals) = self.stream.peek_kind() {
+            self.stream.bump(); // skip '='
+            if let Some(tok) = self.stream.peek() {
+                if let TokenKind::AttributeValue(val) = tok.kind {
+                    let span = tok.span.clone();
+                    let val_str = val.to_string();
+                    self.stream.bump();
+                    return (val_str, Some(span));
+                }
+            }
+        }
+        (String::new(), None)
+    }
+
+    fn check_closing_tag(&self, tag_name: &str) -> bool {
+        if let Some(TokenKind::TagCloseStart) = self.stream.peek_kind() {
+            if let Some(Token {
+                kind: TokenKind::TagName(n),
+                ..
+            }) = self.stream.peek_at(1)
+            {
+                return *n == tag_name;
+            }
+        }
+        false
+    }
+
+    fn consume_closing_tag(&mut self, tag_name: &str) -> bool {
+        if self.check_closing_tag(tag_name) {
+            self.stream.bump(); // TagCloseStart
+            self.stream.bump(); // TagName
+            if let Some(TokenKind::TagOpenEnd) = self.stream.peek_kind() {
+                self.stream.bump(); // TagOpenEnd
+            }
+            true
+        } else {
+            false
+        }
     }
 
     fn parse_element(&mut self) -> Option<ElementNode> {
-        if self.starts_with("</") {
-            return None;
-        }
+        self.stream.bump(); // consume '<' (TagOpenStart)
 
-        if self.starts_with("<!--") {
-            if let Some(idx) = self.input[self.pos..].find("-->") {
-                self.pos += idx + 3;
-            } else {
-                self.pos = self.input.len();
-            }
-            return None;
-        }
-
-        self.pos += 1; // skip '<'
-
-        let mut tag_name_len = 0;
-        for ch in self.input[self.pos..].chars() {
-            if ch.is_alphanumeric() || ch == '-' || ch == '_' {
-                tag_name_len += ch.len_utf8();
-            } else {
-                break;
-            }
-        }
-
-        if tag_name_len == 0 {
-            return None;
-        }
-
-        let name = self.input[self.pos..self.pos + tag_name_len].to_string();
-        self.pos += tag_name_len;
+        let name = match self.stream.bump() {
+            Some(Token {
+                kind: TokenKind::TagName(n),
+                ..
+            }) => n.to_string(),
+            _ => return None,
+        };
 
         let mut attributes = Vec::new();
         let mut properties = Vec::new();
@@ -542,129 +492,106 @@ impl<'a> TemplateParser<'a> {
         let mut two_ways = Vec::new();
         let mut references = Vec::new();
 
-        self.skip_whitespace();
-
-        while !self.is_eof() && !self.starts_with(">") && !self.starts_with("/>") {
-            let mut attr_len = 0;
-            for ch in self.input[self.pos..].chars() {
-                if !ch.is_whitespace() && ch != '=' && ch != '>' && ch != '/' {
-                    attr_len += ch.len_utf8();
-                } else {
-                    break;
-                }
-            }
-
-            if attr_len == 0 {
-                break;
-            }
-
-            let raw_name = self.input[self.pos..self.pos + attr_len].to_string();
-            self.pos += attr_len;
-            self.skip_whitespace();
-
-            let mut value = String::new();
-            let mut val_span: Option<SourceSpan> = None;
-            if self.starts_with("=") {
-                self.pos += 1;
-                self.skip_whitespace();
-                if self.starts_with("\"") || self.starts_with("'") {
-                    let quote = self.input[self.pos..].chars().next().unwrap();
-                    self.pos += quote.len_utf8();
-                    let start_val = self.pos;
-                    while !self.is_eof() {
-                        let ch = self.input[self.pos..].chars().next().unwrap();
-                        let prev = if self.pos > start_val {
-                            self.input[..self.pos].chars().last()
-                        } else {
-                            None
-                        };
-                        if ch == quote && prev != Some('\\') {
-                            let raw = &self.input[start_val..self.pos];
-                            value = raw.trim().to_string();
-                            let leading = raw.len() - raw.trim_start().len();
-                            val_span = Some(SourceSpan {
-                                start: start_val + leading,
-                                end: start_val + leading + value.len(),
-                            });
-                            self.pos += quote.len_utf8();
-                            break;
-                        }
-                        self.pos += ch.len_utf8();
-                    }
-                } else {
-                    let start_val = self.pos;
-                    while !self.is_eof() {
-                        let ch = self.input[self.pos..].chars().next().unwrap();
-                        if ch.is_whitespace() || ch == '>' || ch == '/' {
-                            break;
-                        }
-                        self.pos += ch.len_utf8();
-                    }
-                    let raw = &self.input[start_val..self.pos];
-                    value = raw.trim().to_string();
-                    let leading = raw.len() - raw.trim_start().len();
-                    val_span = Some(SourceSpan {
-                        start: start_val + leading,
-                        end: start_val + leading + value.len(),
+        while !self.stream.is_eof() {
+            match self.stream.peek_kind() {
+                Some(TokenKind::TagOpenEnd) | Some(TokenKind::TagSelfClose) => break,
+                Some(TokenKind::PropertyBinding(name)) => {
+                    let prop_name = name.to_string();
+                    self.stream.bump();
+                    let (value, span) = self.consume_attr_value();
+                    properties.push(PropertyBindingNode {
+                        node_type: "property".to_string(),
+                        name: prop_name,
+                        expression: value,
+                        span,
                     });
                 }
+                Some(TokenKind::EventBinding(name)) => {
+                    let ev_name = name.to_string();
+                    self.stream.bump();
+                    let (handler, span) = self.consume_attr_value();
+                    events.push(EventBindingNode {
+                        node_type: "event".to_string(),
+                        name: ev_name,
+                        handler,
+                        span,
+                    });
+                }
+                Some(TokenKind::TwoWayBinding(name)) => {
+                    let tw_name = name.to_string();
+                    self.stream.bump();
+                    let (expression, span) = self.consume_attr_value();
+                    two_ways.push(TwoWayBindingNode {
+                        node_type: "twoWay".to_string(),
+                        name: tw_name,
+                        expression,
+                        span,
+                    });
+                }
+                Some(TokenKind::TemplateRef(name)) => {
+                    let ref_name = name.to_string();
+                    self.stream.bump();
+                    let value = if let Some(TokenKind::Equals) = self.stream.peek_kind() {
+                        self.stream.bump();
+                        if let Some(Token {
+                            kind: TokenKind::AttributeValue(v),
+                            ..
+                        }) = self.stream.bump()
+                        {
+                            Some(v.to_string())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    references.push(ReferenceNode {
+                        node_type: "reference".to_string(),
+                        name: ref_name,
+                        value,
+                    });
+                }
+                Some(TokenKind::AttributeName(name)) => {
+                    let attr_name = name.to_string();
+                    self.stream.bump();
+                    let value = if let Some(TokenKind::Equals) = self.stream.peek_kind() {
+                        self.stream.bump();
+                        if let Some(Token {
+                            kind: TokenKind::AttributeValue(v),
+                            ..
+                        }) = self.stream.bump()
+                        {
+                            decode_html_entities(v)
+                        } else {
+                            String::new()
+                        }
+                    } else {
+                        String::new()
+                    };
+                    attributes.push(AttributeNode {
+                        node_type: "attribute".to_string(),
+                        name: attr_name,
+                        value,
+                    });
+                }
+                _ => {
+                    self.stream.bump();
+                }
             }
-
-            // Categorize attribute binding
-            if raw_name.starts_with('#') {
-                let ref_name = raw_name[1..].to_string();
-                references.push(ReferenceNode {
-                    node_type: "reference".to_string(),
-                    name: ref_name,
-                    value: if value.is_empty() { None } else { Some(value) },
-                });
-            } else if raw_name.starts_with("[(") && raw_name.ends_with(")]") {
-                let prop_name = raw_name[2..raw_name.len() - 2].to_string();
-                two_ways.push(TwoWayBindingNode {
-                    node_type: "twoWay".to_string(),
-                    name: prop_name,
-                    expression: value,
-                    span: val_span,
-                });
-            } else if raw_name.starts_with('[') && raw_name.ends_with(']') {
-                let prop_name = raw_name[1..raw_name.len() - 1].to_string();
-                properties.push(PropertyBindingNode {
-                    node_type: "property".to_string(),
-                    name: prop_name,
-                    expression: value,
-                    span: val_span,
-                });
-            } else if raw_name.starts_with('(') && raw_name.ends_with(')') {
-                let ev_name = raw_name[1..raw_name.len() - 1].to_string();
-                events.push(EventBindingNode {
-                    node_type: "event".to_string(),
-                    name: ev_name,
-                    handler: value,
-                    span: val_span,
-                });
-            } else {
-                attributes.push(AttributeNode {
-                    node_type: "attribute".to_string(),
-                    name: raw_name,
-                    value: decode_html_entities(&value),
-                });
-            }
-
-            self.skip_whitespace();
         }
 
         let is_self_closing = if is_void_element(&name) {
-            if self.starts_with("/>") {
-                self.pos += 2;
-            } else if self.starts_with(">") {
-                self.pos += 1;
+            if let Some(TokenKind::TagSelfClose) = self.stream.peek_kind() {
+                self.stream.bump();
+            } else if let Some(TokenKind::TagOpenEnd) = self.stream.peek_kind() {
+                self.stream.bump();
             }
             true
-        } else if self.starts_with("/>") {
-            self.pos += 2;
+        } else if let Some(TokenKind::TagSelfClose) = self.stream.peek_kind() {
+            self.stream.bump();
             true
-        } else if self.starts_with(">") {
-            self.pos += 1;
+        } else if let Some(TokenKind::TagOpenEnd) = self.stream.peek_kind() {
+            self.stream.bump();
             false
         } else {
             true
@@ -672,21 +599,25 @@ impl<'a> TemplateParser<'a> {
 
         let mut children = Vec::new();
         if !is_self_closing {
-            while !self.is_eof() {
+            while !self.stream.is_eof() {
                 if self.check_closing_tag(&name) {
                     self.consume_closing_tag(&name);
                     break;
                 }
-                if self.starts_with("</") {
+                if let Some(TokenKind::TagCloseStart) = self.stream.peek_kind() {
                     // Mismatched or outer closing tag, break to allow parent to close!
                     break;
                 }
-                let start_pos = self.pos;
+                let start_pos = self.stream.pos();
                 if let Some(node) = self.parse_node() {
                     children.push(node);
                 }
-                if self.pos == start_pos {
-                    break;
+                if self.stream.pos() == start_pos {
+                    if !self.stream.is_eof() {
+                        self.stream.bump();
+                    } else {
+                        break;
+                    }
                 }
             }
         }
@@ -701,66 +632,6 @@ impl<'a> TemplateParser<'a> {
             children,
             span: None,
         })
-    }
-
-    fn check_closing_tag(&self, tag_name: &str) -> bool {
-        if !self.starts_with("</") {
-            return false;
-        }
-        let rest = &self.input[self.pos + 2..];
-        if !rest.starts_with(tag_name) {
-            return false;
-        }
-        let after_tag = &rest[tag_name.len()..];
-        let trimmed = after_tag.trim_start();
-        trimmed.starts_with('>')
-    }
-
-    fn consume_closing_tag(&mut self, tag_name: &str) -> bool {
-        if !self.starts_with("</") {
-            return false;
-        }
-        let rest = &self.input[self.pos + 2..];
-        if !rest.starts_with(tag_name) {
-            return false;
-        }
-        let after_tag = &rest[tag_name.len()..];
-        let trimmed = after_tag.trim_start();
-        if trimmed.starts_with('>') {
-            let whitespace_len = after_tag.len() - trimmed.len();
-            self.pos += 2 + tag_name.len() + whitespace_len + 1;
-            true
-        } else {
-            false
-        }
-    }
-
-    fn parse_text(&mut self) -> Option<TextNode> {
-        let start = self.pos;
-        while !self.is_eof() {
-            if self.starts_with("<")
-                || self.starts_with("{{")
-                || self.is_control_flow("@if")
-                || self.is_control_flow("@for")
-                || self.is_control_flow("@switch")
-                || self.is_control_flow("@defer")
-                || self.starts_with("}")
-                || self.starts_with("</")
-            {
-                break;
-            }
-            let ch = self.input[self.pos..].chars().next().unwrap();
-            self.pos += ch.len_utf8();
-        }
-
-        let text = self.input[start..self.pos].to_string();
-        if text.is_empty() {
-            None
-        } else {
-            Some(TextNode {
-                value: decode_html_entities(&text),
-            })
-        }
     }
 }
 
@@ -1000,5 +871,20 @@ mod tests {
         } else {
             panic!("Expected SwitchBlock");
         }
+    }
+
+    #[test]
+    fn test_parse_dashboard_template() {
+        let source =
+            std::fs::read_to_string("../../examples/playground/src/views/dashboard.component.ts")
+                .or_else(|_| {
+                    std::fs::read_to_string("examples/playground/src/views/dashboard.component.ts")
+                })
+                .expect("Failed to read dashboard.component.ts");
+        let start = source.find("template: `").unwrap() + 11;
+        let end = source[start..].find("`").unwrap() + start;
+        let tmpl = &source[start..end];
+        let nodes = parse_template(tmpl);
+        assert!(!nodes.is_empty());
     }
 }
