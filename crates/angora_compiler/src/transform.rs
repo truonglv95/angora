@@ -892,7 +892,7 @@ pub fn transform_component_with_path(
 
         if let Some(class) = class_opt {
             if let Some(entity) = extract_entity_metadata(class, source, file_path) {
-                let static_snippet = match &entity {
+                let (static_snippet, render_ast_opt) = match &entity {
                     TransformedEntity::Component(comp) => {
                         needs_runtime = true;
 
@@ -911,7 +911,8 @@ pub fn transform_component_with_path(
                             };
 
                         let template_ast = parse_template(&comp.template);
-                        let render_fn_body = crate::codegen::compile_template_with_scope(
+                        let render_ast = crate::codegen::compile_template_to_ast(
+                            &allocator,
                             &template_ast,
                             scope_id.as_deref(),
                         );
@@ -973,14 +974,14 @@ pub fn transform_component_with_path(
                             String::new()
                         };
 
-                        format!(
+                        let snippet = format!(
                             r#"class _AngoraHelper {{
   static ɵcmp = {{
     selector: '{sel}',
     imports: {imp},
     styles: {styles},
     scopeId: {sid_val},
-    render: {render},
+    render: null,
     ssrRender: {ssr_render},
     type: {cn},
     metadata: {{
@@ -996,14 +997,14 @@ pub fn transform_component_with_path(
                             imp = final_imports,
                             styles = styles_str,
                             sid_val = sid_val,
-                            render = render_fn_body,
                             ssr_render = ssr_render_fn_body,
                             scope_props = scope_props
-                        )
+                        );
+                        (snippet, Some(render_ast))
                     }
                     TransformedEntity::Directive(dir) => {
                         let host_val = dir.host_str.as_deref().unwrap_or("{}");
-                        format!(
+                        let snippet = format!(
                             r#"class _AngoraHelper {{
   static ɵdir = {{
     selector: '{sel}',
@@ -1016,10 +1017,11 @@ pub fn transform_component_with_path(
 }}"#,
                             sel = dir.selector,
                             host = host_val
-                        )
+                        );
+                        (snippet, None)
                     }
                     TransformedEntity::Pipe(pipe) => {
-                        format!(
+                        let snippet = format!(
                             r#"class _AngoraHelper {{
   static ɵpipe = {{
     name: '{name}',
@@ -1032,15 +1034,17 @@ pub fn transform_component_with_path(
 }}"#,
                             name = pipe.name,
                             pure = pipe.pure
-                        )
+                        );
+                        (snippet, None)
                     }
                     TransformedEntity::Injectable(inj) => {
-                        format!(
+                        let snippet = format!(
                             r#"class _AngoraHelper {{
   static ɵprov = {opts};
 }}"#,
                             opts = inj.options_str
-                        )
+                        );
+                        (snippet, None)
                     }
                 };
 
@@ -1050,6 +1054,34 @@ pub fn transform_component_with_path(
                 if let Some(oxc_ast::ast::Statement::ClassDeclaration(helper_cls)) =
                     helper_parsed.program.body.first_mut()
                 {
+                    if let Some(render_ast) = render_ast_opt {
+                        'outer: for elem in helper_cls.body.body.iter_mut() {
+                            if let ClassElement::PropertyDefinition(prop) = elem {
+                                if let PropertyKey::StaticIdentifier(ident) = &prop.key {
+                                    if ident.name == "ɵcmp" {
+                                        if let Some(Expression::ObjectExpression(obj)) =
+                                            &mut prop.value
+                                        {
+                                            for obj_prop in obj.properties.iter_mut() {
+                                                if let ObjectPropertyKind::ObjectProperty(p) =
+                                                    obj_prop
+                                                {
+                                                    if let PropertyKey::StaticIdentifier(key_id) =
+                                                        &p.key
+                                                    {
+                                                        if key_id.name == "render" {
+                                                            p.value = render_ast;
+                                                            break 'outer;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     class.body.body.append(&mut helper_cls.body.body);
                 }
 

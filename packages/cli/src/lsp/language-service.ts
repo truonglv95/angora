@@ -115,13 +115,48 @@ export const BUILTIN_COMPLETIONS: LspCompletion[] = [
  * directly to the native angora_oxc binary. Zero TypeScript AST simulation.
  */
 export class AngoraLanguageService {
+  private lastError: Error | null = null;
+  private resultCache = new Map<string, unknown>();
+
+  public getLastError(): Error | null {
+    return this.lastError;
+  }
+
+  public clearCache(): void {
+    this.resultCache.clear();
+  }
+
+  private getCached<T>(key: string, compute: () => T): T {
+    if (this.resultCache.has(key)) {
+      return this.resultCache.get(key) as T;
+    }
+
+    const value = compute();
+    this.resultCache.set(key, value);
+
+    if (this.resultCache.size > 80) {
+      const firstKey = this.resultCache.keys().next().value;
+      if (firstKey) {
+        this.resultCache.delete(firstKey);
+      }
+    }
+
+    return value;
+  }
+
+  private recordError(err: unknown): void {
+    this.lastError = err instanceof Error ? err : new Error(String(err));
+  }
+
   /**
    * Retrieves all diagnostics (template syntax, standalone imports, type checks)
    * for a TypeScript or template document using 100% Native Rust OXC.
    */
   public getDiagnostics(uri: string, content: string): LspDiagnostic[] {
     try {
-      const rustDiags = getDiagnosticsWithRust(content, uri);
+      const cacheKey = `diagnostics:${uri}:${content}`;
+      const rustDiags = this.getCached(cacheKey, () => getDiagnosticsWithRust(content, uri));
+      this.lastError = null;
       return rustDiags.map(d => ({
         code: d.code,
         message: d.message,
@@ -129,7 +164,8 @@ export class AngoraLanguageService {
         range: d.range,
         source: d.source,
       }));
-    } catch {
+    } catch (err) {
+      this.recordError(err);
       return [];
     }
   }
@@ -139,13 +175,18 @@ export class AngoraLanguageService {
    */
   public getHover(uri: string, content: string, position: LspPosition): LspHover | null {
     try {
-      const rustHover = getHoverWithRust(content, position.line, position.character, uri);
+      const cacheKey = `hover:${uri}:${position.line}:${position.character}:${content}`;
+      const rustHover = this.getCached(cacheKey, () =>
+        getHoverWithRust(content, position.line, position.character, uri)
+      );
+      this.lastError = null;
       if (!rustHover) return null;
       return {
         contents: rustHover.contents,
         range: rustHover.range,
       };
-    } catch {
+    } catch (err) {
+      this.recordError(err);
       return null;
     }
   }
@@ -155,12 +196,11 @@ export class AngoraLanguageService {
    */
   public getCompletions(uri: string, content: string, position: LspPosition): LspCompletion[] {
     try {
-      const rustCompletions = getCompletionsWithRust(
-        content,
-        position.line,
-        position.character,
-        uri
+      const cacheKey = `completions:${uri}:${position.line}:${position.character}:${content}`;
+      const rustCompletions = this.getCached(cacheKey, () =>
+        getCompletionsWithRust(content, position.line, position.character, uri)
       );
+      this.lastError = null;
       return rustCompletions.map(c => ({
         label: c.label,
         kind: c.kind as any,
@@ -169,7 +209,8 @@ export class AngoraLanguageService {
         documentation: c.documentation,
         sortText: c.sortText,
       }));
-    } catch {
+    } catch (err) {
+      this.recordError(err);
       return BUILTIN_COMPLETIONS;
     }
   }
@@ -179,13 +220,18 @@ export class AngoraLanguageService {
    */
   public getDefinition(uri: string, content: string, position: LspPosition): LspDefinition[] {
     try {
-      const rustDefs = getDefinitionWithRust(content, position.line, position.character, uri);
+      const cacheKey = `definition:${uri}:${position.line}:${position.character}:${content}`;
+      const rustDefs = this.getCached(cacheKey, () =>
+        getDefinitionWithRust(content, position.line, position.character, uri)
+      );
+      this.lastError = null;
       return rustDefs.map(d => ({
         uri: d.uri,
         range: d.range,
         symbol: d.symbol,
       }));
-    } catch {
+    } catch (err) {
+      this.recordError(err);
       return [];
     }
   }

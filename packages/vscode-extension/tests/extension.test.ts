@@ -2,12 +2,16 @@ import { describe, test, expect } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  AngoraNativeLspClient,
   getCompletions,
   diagnoseDocument,
   getHoverInfo,
   getDefinition,
   findTemplateReferences,
+  getSuggestedCodeActions,
+  toVsCompletionKind,
 } from '../src/extension.ts';
+import { tryFindRustCompilerBinary } from '@angora-js/compiler';
 
 describe('Angora Language Tools - VS Code Extension & LSP', () => {
   test('should parse TextMate grammar syntax JSON without errors', () => {
@@ -47,6 +51,129 @@ describe('Angora Language Tools - VS Code Extension & LSP', () => {
     expect(refs.length).toBe(2);
     expect(refs[0].name).toBe('myInput');
     expect(refs[1].name).toBe('submitBtn');
+  });
+
+  test('should map Angora completion kinds to VS Code completion kinds', () => {
+    const fakeVscode = {
+      CompletionItemKind: {
+        Keyword: 14,
+        Snippet: 15,
+        Function: 3,
+        Property: 9,
+        Method: 2,
+        Class: 7,
+        Variable: 6,
+        Text: 1,
+      },
+    };
+
+    expect(toVsCompletionKind(fakeVscode, 'Snippet')).toBe(15);
+    expect(toVsCompletionKind(fakeVscode, 'Property')).toBe(9);
+    expect(toVsCompletionKind(fakeVscode, 'Method')).toBe(2);
+  });
+
+  test('should suggest quick fixes for uncalled signals, missing members, and imports', () => {
+    const source = `import { Component, signal } from '@angora-js/core';
+
+@Component({
+  selector: 'my-comp',
+  imports: [],
+  template: \`
+    <div>
+      <input [disabled]="isPending" />
+      <unknown-card />
+      <p>{{ missingTitle }}</p>
+      <p>{{ missingMethod() }}</p>
+      <p>{{ 'hello' | customFormat }}</p>
+    </div>
+  \`
+})
+export class MyComp {
+  isPending = signal(false);
+}
+`;
+
+    const diags = diagnoseDocument(source);
+    const uncalled = diags.find(d => d.message.includes("Did you mean to call 'isPending()'"));
+    const missingTitle = diags.find(d => d.message.includes("Property 'missingTitle'"));
+    const missingMethod = diags.find(d => d.message.includes("Property 'missingMethod'"));
+    const unknownCard = diags.find(d => d.code === 'NG8001');
+    const customPipe = diags.find(d => d.code === 'NG8004');
+
+    expect(uncalled).toBeDefined();
+    expect(getSuggestedCodeActions(source, uncalled as any)[0]?.title).toBe(
+      'Call signal as isPending()'
+    );
+
+    expect(missingTitle).toBeDefined();
+    expect(getSuggestedCodeActions(source, missingTitle as any)[0]?.title).toBe(
+      'Create property missingTitle'
+    );
+
+    expect(missingMethod).toBeDefined();
+    expect(getSuggestedCodeActions(source, missingMethod as any)[0]?.title).toBe(
+      'Create method missingMethod()'
+    );
+
+    expect(unknownCard).toBeDefined();
+    expect(getSuggestedCodeActions(source, unknownCard as any)[0]?.title).toBe(
+      'Add UnknownCardComponent to @Component.imports'
+    );
+
+    expect(customPipe).toBeDefined();
+    expect(getSuggestedCodeActions(source, customPipe as any)[0]?.title).toBe(
+      'Add CustomFormatPipe to @Component.imports'
+    );
+  });
+
+  test('should serve diagnostics, hover, and completions through persistent native LSP', async () => {
+    const binaryPath = tryFindRustCompilerBinary();
+    if (!binaryPath) {
+      return;
+    }
+
+    const source = `import { Component, signal } from '@angora-js/core';
+
+@Component({
+  selector: 'native-lsp-test',
+  template: \`
+    <div>
+      <h1>{{ title() }}</h1>
+      <input [disabled]="title()" />
+      <input [disabled]="isPending" />
+    </div>
+  \`
+})
+export class NativeLspTest {
+  /** The page title */
+  title = signal<string>('Hello');
+  isPending = signal<boolean>(false);
+}
+`;
+
+    const client = new AngoraNativeLspClient(binaryPath, { requestTimeoutMs: 5000 });
+    const uri = 'file:///workspace/src/native-lsp-test.component.ts';
+    try {
+      const diags = await client.getDiagnostics(uri, source);
+      expect(diags.some(d => d.code === 'TS2322')).toBe(true);
+
+      const lines = source.split('\n');
+      const titleLine = lines.findIndex(l => l.includes('title()'));
+      const titleChar = lines[titleLine].indexOf('title');
+      const hover = await client.getHover(uri, source, {
+        line: titleLine,
+        character: titleChar,
+      });
+      expect(hover?.contents).toContain('NativeLspTest.title: Signal<string>');
+
+      const completions = await client.getCompletions(uri, source, {
+        line: titleLine,
+        character: titleChar,
+      });
+      expect(completions.some(c => c.label === 'title')).toBe(true);
+    } finally {
+      client.dispose();
+    }
   });
 
   describe('Feature 1: Báo lỗi đỏ trực tiếp trên template (Template Diagnostics)', () => {
