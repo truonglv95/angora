@@ -23,6 +23,7 @@ enum BindingKind {
     DeferBlock(DeferBlockNode),
     Slot(Option<String>),
     CustomComponent(ElementNode),
+    DynamicComponent(ElementNode),
 }
 
 struct NodeBinding {
@@ -123,7 +124,10 @@ impl CodeGenerator {
     ) -> Option<String> {
         match node {
             TemplateNode::Element(el) => {
-                if el.name == "ng-content" {
+                if el.name == "dynamic" || el.properties.iter().any(|p| p.name == "componentOutlet")
+                {
+                    Some(self.generate_dynamic_component(el, parent_var, scope_vars))
+                } else if el.name == "ng-content" {
                     let select = el
                         .attributes
                         .iter()
@@ -225,7 +229,18 @@ impl CodeGenerator {
 
             match child {
                 TemplateNode::Element(child_el) => {
-                    if child_el.name == "ng-content" {
+                    if child_el.name == "dynamic"
+                        || child_el
+                            .properties
+                            .iter()
+                            .any(|p| p.name == "componentOutlet")
+                    {
+                        html.push_str("<!--angora:dynamic-->");
+                        bindings.push(NodeBinding {
+                            path: child_path,
+                            kind: BindingKind::DynamicComponent(child_el.clone()),
+                        });
+                    } else if child_el.name == "ng-content" {
                         let select = child_el
                             .attributes
                             .iter()
@@ -665,6 +680,28 @@ impl CodeGenerator {
                         projected_fn
                     ));
                 }
+                BindingKind::DynamicComponent(dyn_el) => {
+                    let comp_prop = dyn_el.properties.iter().find(|p| {
+                        p.name == "component" || p.name == "componentOutlet" || p.name == "is"
+                    });
+                    let comp_expr = if let Some(cp) = comp_prop {
+                        self.prefix_ctx(&cp.expression, scope_vars)
+                    } else {
+                        "null".to_string()
+                    };
+
+                    let inputs_prop = dyn_el.properties.iter().find(|p| p.name == "inputs");
+                    let inputs_expr = if let Some(ip) = inputs_prop {
+                        format!("() => ({})", self.prefix_ctx(&ip.expression, scope_vars))
+                    } else {
+                        "undefined".to_string()
+                    };
+
+                    self.statements.push(format!(
+                        "createDynamicComponent({}, () => ({}), {}, injector);",
+                        target_var, comp_expr, inputs_expr
+                    ));
+                }
             }
         }
 
@@ -1060,6 +1097,48 @@ impl CodeGenerator {
             loading_after,
             loading_minimum,
             placeholder_minimum
+        ));
+
+        anchor_var
+    }
+
+    fn generate_dynamic_component(
+        &mut self,
+        dyn_el: &ElementNode,
+        parent_var: Option<&str>,
+        scope_vars: &HashSet<String>,
+    ) -> String {
+        let anchor_var = self.next_id("dyn_anchor");
+        self.statements.push(format!(
+            "const {} = createComment('angora:dynamic');",
+            anchor_var
+        ));
+
+        if let Some(pv) = parent_var {
+            self.statements
+                .push(format!("{}.appendChild({});", pv, anchor_var));
+        }
+
+        let comp_prop = dyn_el
+            .properties
+            .iter()
+            .find(|p| p.name == "component" || p.name == "componentOutlet" || p.name == "is");
+        let comp_expr = if let Some(cp) = comp_prop {
+            self.prefix_ctx(&cp.expression, scope_vars)
+        } else {
+            "null".to_string()
+        };
+
+        let inputs_prop = dyn_el.properties.iter().find(|p| p.name == "inputs");
+        let inputs_expr = if let Some(ip) = inputs_prop {
+            format!("() => ({})", self.prefix_ctx(&ip.expression, scope_vars))
+        } else {
+            "undefined".to_string()
+        };
+
+        self.statements.push(format!(
+            "createDynamicComponent({}, () => ({}), {}, injector);",
+            anchor_var, comp_expr, inputs_expr
         ));
 
         anchor_var

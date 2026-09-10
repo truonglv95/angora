@@ -1116,7 +1116,7 @@ pub fn transform_component_with_path(
 
     let mut prefix_imports = String::new();
     if needs_runtime {
-        prefix_imports.push_str("import { createElement, createText, createComment, bindText, bindProp, bindClass, bindStyle, bindTwoWay, bindEvent, createIf, createFor, createSwitch, createDefer, applyPipe, mountComponent, injectComponentStyles, template, applyMatchingDirectives, findImportedComponent, COMPONENT_DEF } from '@angora-js/runtime';\n");
+        prefix_imports.push_str("import { createElement, createText, createComment, bindText, bindProp, bindClass, bindStyle, bindTwoWay, bindEvent, createIf, createFor, createSwitch, createDynamicComponent, createDefer, applyPipe, mountComponent, injectComponentStyles, template, applyMatchingDirectives, findImportedComponent, COMPONENT_DEF } from '@angora-js/runtime';\n");
     }
 
     Ok(format!(

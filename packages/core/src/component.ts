@@ -20,7 +20,7 @@ export type ComponentImports = any[] | (() => any[]);
 
 export interface ComponentMetadata {
   selector?: string;
-  template: string;
+  template?: string;
   imports?: ComponentImports;
   styles?: string[];
   encapsulation?: ViewEncapsulation;

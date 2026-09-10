@@ -577,6 +577,7 @@ fn get_element_type(tag: &str) -> &'static str {
         "option" => "HTMLOptionElement",
         "dialog" => "HTMLDialogElement",
         "iframe" => "HTMLIFrameElement",
+        "dynamic" | "ng-container" => "any",
         _ => {
             if tag.contains('-') {
                 "any"

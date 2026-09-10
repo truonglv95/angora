@@ -330,14 +330,24 @@ impl<'a> TemplateParser<'a> {
                 }
 
                 if self.starts_with("@case") {
-                    self.pos += 5; // skip '@case'
-                    let (val, case_span) = self.parse_parenthesized_expr_with_span();
+                    let mut case_values = Vec::new();
+                    while self.starts_with("@case") {
+                        self.pos += 5; // skip '@case'
+                        self.skip_whitespace();
+                        let (val, case_span) = self.parse_parenthesized_expr_with_span();
+                        self.skip_whitespace();
+                        for single_val in split_case_values(&val) {
+                            case_values.push((single_val, case_span.clone()));
+                        }
+                    }
                     let children = self.parse_block();
-                    cases.push(SwitchCase {
-                        case_value: Some(val),
-                        children,
-                        span: Some(case_span),
-                    });
+                    for (val, span) in case_values {
+                        cases.push(SwitchCase {
+                            case_value: Some(val),
+                            children: children.clone(),
+                            span: Some(span),
+                        });
+                    }
                 } else if self.starts_with("@default") {
                     self.pos += 8; // skip '@default'
                     let children = self.parse_block();
@@ -816,6 +826,55 @@ pub fn decode_html_entities(s: &str) -> String {
     out
 }
 
+pub fn split_case_values(expr: &str) -> Vec<String> {
+    let mut results = Vec::new();
+    let mut current = String::new();
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut paren_depth = 0;
+
+    for ch in expr.chars() {
+        match ch {
+            '\'' if !in_double_quote => {
+                in_single_quote = !in_single_quote;
+                current.push(ch);
+            }
+            '"' if !in_single_quote => {
+                in_double_quote = !in_double_quote;
+                current.push(ch);
+            }
+            '(' | '[' | '{' if !in_single_quote && !in_double_quote => {
+                paren_depth += 1;
+                current.push(ch);
+            }
+            ')' | ']' | '}' if !in_single_quote && !in_double_quote => {
+                if paren_depth > 0 {
+                    paren_depth -= 1;
+                }
+                current.push(ch);
+            }
+            ',' if !in_single_quote && !in_double_quote && paren_depth == 0 => {
+                let trimmed = current.trim();
+                if !trimmed.is_empty() {
+                    results.push(trimmed.to_string());
+                }
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        results.push(trimmed.to_string());
+    }
+
+    if results.is_empty() {
+        vec![expr.trim().to_string()]
+    } else {
+        results
+    }
+}
+
 pub fn parse_template(input: &str) -> Vec<TemplateNode> {
     TemplateParser::new(input).parse()
 }
@@ -906,6 +965,40 @@ mod tests {
                 let track_span = fb.track_span.as_ref().unwrap();
                 assert_eq!(&input[track_span.start..track_span.end], "item.id");
             }
+        }
+    }
+
+    #[test]
+    fn test_parse_switch_multi_case_and_fallthrough() {
+        let input = r#"@switch (user.role) {
+            @case ('admin', 'superadmin', 'owner') {
+                <span class="privileged">Admin Panel</span>
+            }
+            @case ('editor')
+            @case ('author') {
+                <span class="writer">Content Studio</span>
+            }
+            @default {
+                <span class="standard">Standard User</span>
+            }
+        }"#;
+
+        let nodes = parse_template(input);
+        assert_eq!(nodes.len(), 1);
+        if let TemplateNode::SwitchBlock(sw) = &nodes[0] {
+            assert_eq!(sw.expression, "user.role");
+            // 3 from first block ('admin', 'superadmin', 'owner')
+            // 2 from second fallthrough block ('editor', 'author')
+            // 1 from @default
+            assert_eq!(sw.cases.len(), 6);
+            assert_eq!(sw.cases[0].case_value.as_deref(), Some("'admin'"));
+            assert_eq!(sw.cases[1].case_value.as_deref(), Some("'superadmin'"));
+            assert_eq!(sw.cases[2].case_value.as_deref(), Some("'owner'"));
+            assert_eq!(sw.cases[3].case_value.as_deref(), Some("'editor'"));
+            assert_eq!(sw.cases[4].case_value.as_deref(), Some("'author'"));
+            assert_eq!(sw.cases[5].case_value.as_deref(), None); // @default
+        } else {
+            panic!("Expected SwitchBlock");
         }
     }
 }

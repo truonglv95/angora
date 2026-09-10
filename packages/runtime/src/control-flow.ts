@@ -86,7 +86,7 @@ export function createIf(
 }
 
 export interface SwitchCaseDef<T = any> {
-  caseValue?: T; // undefined for @default
+  caseValue?: T | T[] | ((val: T) => boolean); // undefined for @default, array for multi-value, predicate fn
   render: BlockRenderer;
 }
 
@@ -94,7 +94,7 @@ export interface SwitchCaseDef<T = any> {
  * Modern Angular @switch control flow runtime block
  * @example
  * createSwitch(anchor, () => status(), [
- *   { caseValue: 'active', render: () => [activeSpan] },
+ *   { caseValue: ['active', 'in-progress'], render: () => [activeSpan] },
  *   { caseValue: 'pending', render: () => [pendingSpan] },
  *   { render: () => [defaultSpan] } // @default
  * ]);
@@ -124,7 +124,16 @@ export function createSwitch<T = any>(
     for (let i = 0; i < cases.length; i++) {
       const c = cases[i];
       if (c.caseValue !== undefined) {
-        if (c.caseValue === value) {
+        let isMatch = false;
+        if (Array.isArray(c.caseValue)) {
+          isMatch = c.caseValue.includes(value);
+        } else if (typeof c.caseValue === 'function') {
+          isMatch = (c.caseValue as any)(value);
+        } else {
+          isMatch = c.caseValue === value;
+        }
+
+        if (isMatch) {
           matchedIndex = i;
           break;
         }

@@ -447,4 +447,33 @@ mod tests {
         // Clean up temp dir
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_rust_dynamic_component_transform() {
+        let source = r#"
+            import { Component, signal } from '@angora-js/core';
+
+            @Component({
+                selector: 'app-dynamic-host',
+                template: `
+                    <div class="tabs">
+                        <dynamic [component]="currentTab()" [inputs]="tabInputs()" />
+                        <ng-container [componentOutlet]="otherTab()" [inputs]="{ id: 42 }" />
+                    </div>
+                `
+            })
+            export class DynamicHostComponent {
+                currentTab = signal(null);
+                otherTab = signal(null);
+                tabInputs = signal({});
+            }
+        "#;
+        let result = transform_component(source).expect("Transform dynamic component failed");
+        assert!(result.contains("createDynamicComponent"));
+        assert!(result.contains("() => ctx.currentTab()"));
+        assert!(result.contains("() => ctx.tabInputs()"));
+        assert!(result.contains("() => ctx.otherTab()"));
+        assert!(result.contains("() => ({ id: 42 })"));
+        assert!(result.contains("<!--angora:dynamic-->"));
+    }
 }

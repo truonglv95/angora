@@ -61,7 +61,10 @@ impl SsrCodeGenerator {
     ) {
         match node {
             TemplateNode::Element(el) => {
-                if el.name == "ng-content" {
+                if el.name == "dynamic" || el.properties.iter().any(|p| p.name == "componentOutlet")
+                {
+                    stmts.push("__out.push('<!--angora:dynamic-->');".to_string());
+                } else if el.name == "ng-content" {
                     let select = el
                         .attributes
                         .iter()
