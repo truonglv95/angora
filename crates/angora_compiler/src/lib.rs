@@ -5,6 +5,7 @@ pub mod ast_builder_utils;
 pub mod codegen;
 pub mod constants;
 pub mod css;
+pub mod expr_transform;
 pub mod lexer;
 pub mod lsp;
 pub mod parser;

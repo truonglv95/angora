@@ -494,6 +494,9 @@ impl SsrCodeGenerator {
     }
 
     fn prefix_ctx(&self, expr: &str, scope_vars: &HashSet<String>) -> String {
+        if let Some(ast_transformed) = crate::expr_transform::transform_expr_ast(expr, scope_vars) {
+            return ast_transformed;
+        }
         let keywords: HashSet<&str> = [
             "true",
             "false",

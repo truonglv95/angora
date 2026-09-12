@@ -1531,6 +1531,9 @@ impl<'a> AstCodeGenerator<'a> {
         if self.contains_pipe(expr) {
             return self.compile_pipe(expr, scope_vars);
         }
+        if let Some(ast_transformed) = crate::expr_transform::transform_expr_ast(expr, scope_vars) {
+            return ast_transformed;
+        }
         self.standard_prefix_ctx(expr, scope_vars)
     }
 
