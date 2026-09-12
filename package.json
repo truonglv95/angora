@@ -10,6 +10,8 @@
   "scripts": {
     "test": "bun test",
     "test:watch": "bun test --watch",
+    "benchmark": "bun run benchmarks/krausest/run-benchmark.ts",
+    "audit:bundles": "bun run scripts/audit-bundles.ts",
     "build:packages": "bun scripts/build-packages.ts",
     "prepare:packages": "bun scripts/prepare-package-json.ts",
     "changeset": "changeset",
