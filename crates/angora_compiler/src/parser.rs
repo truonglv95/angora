@@ -23,14 +23,31 @@ pub fn is_void_element(name: &str) -> bool {
 }
 
 pub struct TemplateParser<'a> {
+    pub input: &'a str,
     stream: TokenStream<'a>,
+    pub diagnostics: Vec<TemplateDiagnostic>,
 }
 
 impl<'a> TemplateParser<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
+            input,
             stream: TokenStream::from_input(input),
+            diagnostics: Vec::new(),
         }
+    }
+
+    pub fn emit_error(&mut self, code: &str, message: impl Into<String>, span: SourceSpan) {
+        let (line, column) = calculate_line_column(self.input, span.start);
+        self.diagnostics
+            .push(TemplateDiagnostic::error(code, message, span, line, column));
+    }
+
+    pub fn emit_warning(&mut self, code: &str, message: impl Into<String>, span: SourceSpan) {
+        let (line, column) = calculate_line_column(self.input, span.start);
+        self.diagnostics.push(TemplateDiagnostic::warning(
+            code, message, span, line, column,
+        ));
     }
 
     pub fn parse(&mut self) -> Vec<TemplateNode> {
@@ -40,6 +57,34 @@ impl<'a> TemplateParser<'a> {
                 self.stream.peek_kind(),
                 Some(TokenKind::CloseBrace) | Some(TokenKind::TagCloseStart)
             ) {
+                if let Some(TokenKind::TagCloseStart) = self.stream.peek_kind() {
+                    // Stray closing tag at root level
+                    let start = self.stream.pos();
+                    self.stream.bump(); // </
+                    let tag_name = if let Some(TokenKind::TagName(n)) = self.stream.peek_kind() {
+                        let name = n.to_string();
+                        self.stream.bump();
+                        name
+                    } else {
+                        "unknown".to_string()
+                    };
+                    if let Some(TokenKind::TagOpenEnd) = self.stream.peek_kind() {
+                        self.stream.bump();
+                    }
+                    let span = SourceSpan {
+                        start,
+                        end: self.stream.pos(),
+                    };
+                    self.emit_error(
+                        "ANG0104",
+                        format!(
+                            "Unexpected closing tag '</{}>' with no matching open tag.",
+                            tag_name
+                        ),
+                        span,
+                    );
+                    continue;
+                }
                 break;
             }
 
@@ -58,13 +103,19 @@ impl<'a> TemplateParser<'a> {
         nodes
     }
 
+    pub fn parse_with_diagnostics(&mut self) -> (Vec<TemplateNode>, Vec<TemplateDiagnostic>) {
+        let nodes = self.parse();
+        (nodes, std::mem::take(&mut self.diagnostics))
+    }
+
     fn parse_node(&mut self) -> Option<TemplateNode> {
         if self.stream.is_eof() {
             return None;
         }
 
         match self.stream.peek_kind()? {
-            TokenKind::CloseBrace | TokenKind::TagCloseStart => None,
+            TokenKind::CloseBrace => None,
+            TokenKind::TagCloseStart => None,
             TokenKind::ControlFlow(ControlFlowKeyword::If) => {
                 Some(TemplateNode::IfBlock(self.parse_if_block()))
             }
@@ -108,17 +159,28 @@ impl<'a> TemplateParser<'a> {
         )
     }
 
-    fn parse_block(&mut self) -> Vec<TemplateNode> {
+    fn parse_block(&mut self, block_name: &str, start_span: SourceSpan) -> Vec<TemplateNode> {
         if let Some(TokenKind::OpenBrace) = self.stream.peek_kind() {
             self.stream.bump(); // skip '{'
         } else {
+            let pos = self.stream.pos();
+            self.emit_error(
+                "ANG0111",
+                format!("Expected '{{' to begin block for '{}'.", block_name),
+                SourceSpan {
+                    start: pos,
+                    end: pos,
+                },
+            );
             return Vec::new();
         }
 
         let mut nodes = Vec::new();
+        let mut closed = false;
         while !self.stream.is_eof() {
             if let Some(TokenKind::CloseBrace) = self.stream.peek_kind() {
                 self.stream.bump(); // skip '}'
+                closed = true;
                 break;
             }
             let start_pos = self.stream.pos();
@@ -133,14 +195,34 @@ impl<'a> TemplateParser<'a> {
                 }
             }
         }
+
+        if !closed {
+            self.emit_error(
+                "ANG0112",
+                format!(
+                    "Unclosed block for '{}'. Expected closing '}}'.",
+                    block_name
+                ),
+                start_span,
+            );
+        }
+
         nodes
     }
 
     fn parse_if_block(&mut self) -> IfBlockNode {
-        self.stream.bump(); // skip '@if'
+        let tok = self.stream.bump().unwrap(); // skip '@if'
+        let if_span = tok.span;
 
         let (condition, cond_span) = self.consume_expression();
-        let children = self.parse_block();
+        if condition.trim().is_empty() {
+            self.emit_error(
+                "ANG0110",
+                "Missing condition expression in '@if' block. Expected '@if (condition)'.",
+                if_span.clone(),
+            );
+        }
+        let children = self.parse_block("@if", if_span);
 
         let mut branches = vec![IfBranch {
             condition: Some(condition),
@@ -150,9 +232,17 @@ impl<'a> TemplateParser<'a> {
 
         while let Some(TokenKind::ControlFlow(ControlFlowKeyword::ElseIf)) = self.stream.peek_kind()
         {
-            self.stream.bump(); // skip '@else if'
+            let tok = self.stream.bump().unwrap(); // skip '@else if'
+            let elseif_span = tok.span;
             let (next_cond, next_span) = self.consume_expression();
-            let next_children = self.parse_block();
+            if next_cond.trim().is_empty() {
+                self.emit_error(
+                    "ANG0110",
+                    "Missing condition expression in '@else if' block. Expected '@else if (condition)'.",
+                    elseif_span.clone(),
+                );
+            }
+            let next_children = self.parse_block("@else if", elseif_span);
             branches.push(IfBranch {
                 condition: Some(next_cond),
                 children: next_children,
@@ -161,8 +251,9 @@ impl<'a> TemplateParser<'a> {
         }
 
         if let Some(TokenKind::ControlFlow(ControlFlowKeyword::Else)) = self.stream.peek_kind() {
-            self.stream.bump(); // skip '@else'
-            let else_children = self.parse_block();
+            let tok = self.stream.bump().unwrap(); // skip '@else'
+            let else_span = tok.span;
+            let else_children = self.parse_block("@else", else_span);
             branches.push(IfBranch {
                 condition: None,
                 children: else_children,
@@ -174,15 +265,29 @@ impl<'a> TemplateParser<'a> {
     }
 
     fn parse_for_block(&mut self) -> ForBlockNode {
-        self.stream.bump(); // skip '@for'
+        let tok = self.stream.bump().unwrap(); // skip '@for'
+        let for_span = tok.span;
 
         let (header, header_span) = self.consume_expression();
-        let children = self.parse_block();
+        if header.trim().is_empty() {
+            self.emit_error(
+                "ANG0120",
+                "Missing loop expression in '@for' block. Expected '@for (item of items; track trackBy)'.",
+                for_span.clone(),
+            );
+        } else if !header.contains("track ") && !header.contains("; track") {
+            self.emit_warning(
+                "ANG0121",
+                "'@for' loop is missing a mandatory 'track' expression. Example: '@for (item of items; track item.id)'.",
+                header_span.clone(),
+            );
+        }
+        let children = self.parse_block("@for", for_span);
 
         let mut empty_block = None;
         if let Some(TokenKind::ControlFlow(ControlFlowKeyword::Empty)) = self.stream.peek_kind() {
-            self.stream.bump(); // skip '@empty'
-            empty_block = Some(self.parse_block());
+            let empty_tok = self.stream.bump().unwrap(); // skip '@empty'
+            empty_block = Some(self.parse_block("@empty", empty_tok.span));
         }
 
         let parts: Vec<&str> = header.split(';').collect();
@@ -233,16 +338,26 @@ impl<'a> TemplateParser<'a> {
     }
 
     fn parse_switch_block(&mut self) -> SwitchBlockNode {
-        self.stream.bump(); // skip '@switch'
+        let tok = self.stream.bump().unwrap(); // skip '@switch'
+        let switch_span = tok.span;
 
         let (expression, expr_span) = self.consume_expression();
+        if expression.trim().is_empty() {
+            self.emit_error(
+                "ANG0130",
+                "Missing expression in '@switch' block. Expected '@switch (expression)'.",
+                switch_span.clone(),
+            );
+        }
 
         let mut cases = Vec::new();
         if let Some(TokenKind::OpenBrace) = self.stream.peek_kind() {
             self.stream.bump(); // skip '{'
+            let mut closed = false;
             while !self.stream.is_eof() {
                 if let Some(TokenKind::CloseBrace) = self.stream.peek_kind() {
                     self.stream.bump(); // skip '}'
+                    closed = true;
                     break;
                 }
 
@@ -250,16 +365,28 @@ impl<'a> TemplateParser<'a> {
                     self.stream.peek_kind()
                 {
                     let mut case_values = Vec::new();
+                    let mut first_case_span = None;
                     while let Some(TokenKind::ControlFlow(ControlFlowKeyword::Case)) =
                         self.stream.peek_kind()
                     {
-                        self.stream.bump(); // skip '@case'
+                        let case_tok = self.stream.bump().unwrap(); // skip '@case'
+                        if first_case_span.is_none() {
+                            first_case_span = Some(case_tok.span.clone());
+                        }
                         let (val, case_span) = self.consume_expression();
+                        if val.trim().is_empty() {
+                            self.emit_error(
+                                "ANG0132",
+                                "Missing value in '@case' block. Expected '@case (value)'.",
+                                case_tok.span,
+                            );
+                        }
                         for single_val in split_case_values(&val) {
                             case_values.push((single_val, case_span.clone()));
                         }
                     }
-                    let children = self.parse_block();
+                    let span_for_block = first_case_span.unwrap_or_else(|| switch_span.clone());
+                    let children = self.parse_block("@case", span_for_block);
                     for (val, span) in case_values {
                         cases.push(SwitchCase {
                             case_value: Some(val),
@@ -270,8 +397,8 @@ impl<'a> TemplateParser<'a> {
                 } else if let Some(TokenKind::ControlFlow(ControlFlowKeyword::Default)) =
                     self.stream.peek_kind()
                 {
-                    self.stream.bump(); // skip '@default'
-                    let children = self.parse_block();
+                    let def_tok = self.stream.bump().unwrap(); // skip '@default'
+                    let children = self.parse_block("@default", def_tok.span);
                     cases.push(SwitchCase {
                         case_value: None,
                         children,
@@ -281,6 +408,24 @@ impl<'a> TemplateParser<'a> {
                     self.stream.bump();
                 }
             }
+
+            if !closed {
+                self.emit_error(
+                    "ANG0131",
+                    "Unclosed block in '@switch'. Expected closing '}'.",
+                    switch_span,
+                );
+            }
+        } else {
+            let pos = self.stream.pos();
+            self.emit_error(
+                "ANG0111",
+                "Expected '{' after '@switch (expression)'.",
+                SourceSpan {
+                    start: pos,
+                    end: pos,
+                },
+            );
         }
 
         SwitchBlockNode {
@@ -291,7 +436,8 @@ impl<'a> TemplateParser<'a> {
     }
 
     fn parse_defer_block(&mut self) -> DeferBlockNode {
-        self.stream.bump(); // skip '@defer'
+        let tok = self.stream.bump().unwrap(); // skip '@defer'
+        let defer_span = tok.span;
 
         let mut triggers = Vec::new();
         if let Some(TokenKind::Expression(_)) = self.stream.peek_kind() {
@@ -328,7 +474,7 @@ impl<'a> TemplateParser<'a> {
             });
         }
 
-        let main_block = self.parse_block();
+        let main_block = self.parse_block("@defer", defer_span);
         let mut placeholder_block = None;
         let mut loading_block = None;
         let mut error_block = None;
@@ -336,7 +482,7 @@ impl<'a> TemplateParser<'a> {
         while let Some(TokenKind::ControlFlow(kw)) = self.stream.peek_kind() {
             match kw {
                 ControlFlowKeyword::Placeholder => {
-                    self.stream.bump();
+                    let p_tok = self.stream.bump().unwrap();
                     let mut minimum = None;
                     if let Some(TokenKind::Expression(_)) = self.stream.peek_kind() {
                         let (expr, _) = self.consume_expression();
@@ -349,11 +495,11 @@ impl<'a> TemplateParser<'a> {
                             }
                         }
                     }
-                    let children = self.parse_block();
+                    let children = self.parse_block("@placeholder", p_tok.span);
                     placeholder_block = Some(PlaceholderBlock { children, minimum });
                 }
                 ControlFlowKeyword::Loading => {
-                    self.stream.bump();
+                    let l_tok = self.stream.bump().unwrap();
                     let mut after = None;
                     let mut minimum = None;
                     if let Some(TokenKind::Expression(_)) = self.stream.peek_kind() {
@@ -377,7 +523,7 @@ impl<'a> TemplateParser<'a> {
                             }
                         }
                     }
-                    let children = self.parse_block();
+                    let children = self.parse_block("@loading", l_tok.span);
                     loading_block = Some(LoadingBlock {
                         children,
                         after,
@@ -385,8 +531,8 @@ impl<'a> TemplateParser<'a> {
                     });
                 }
                 ControlFlowKeyword::Error => {
-                    self.stream.bump();
-                    let children = self.parse_block();
+                    let e_tok = self.stream.bump().unwrap();
+                    let children = self.parse_block("@error", e_tok.span);
                     error_block = Some(ErrorBlock { children });
                 }
                 _ => break,
@@ -405,6 +551,20 @@ impl<'a> TemplateParser<'a> {
     fn parse_interpolation(&mut self) -> InterpolationNode {
         if let Some(tok) = self.stream.bump() {
             if let TokenKind::Interpolation(expr) = tok.kind {
+                if expr.trim().is_empty() {
+                    self.emit_warning(
+                        "ANG0150",
+                        "Empty interpolation '{{ }}'. Expected an expression.",
+                        tok.span.clone(),
+                    );
+                }
+                if tok.span.end == self.input.len() && !self.input.ends_with("}}") {
+                    self.emit_error(
+                        "ANG0151",
+                        "Unterminated interpolation. Expected closing '}}'.",
+                        tok.span.clone(),
+                    );
+                }
                 return InterpolationNode {
                     expression: expr.to_string(),
                     span: Some(tok.span),
@@ -476,14 +636,26 @@ impl<'a> TemplateParser<'a> {
     }
 
     fn parse_element(&mut self) -> Option<ElementNode> {
-        self.stream.bump(); // consume '<' (TagOpenStart)
+        let open_tok = self.stream.bump().unwrap(); // consume '<' (TagOpenStart)
+        let open_span = open_tok.span;
 
         let name = match self.stream.bump() {
             Some(Token {
                 kind: TokenKind::TagName(n),
                 ..
             }) => n.to_string(),
-            _ => return None,
+            _ => {
+                let pos = self.stream.pos();
+                self.emit_error(
+                    "ANG0104",
+                    "Expected tag name after '<'.",
+                    SourceSpan {
+                        start: open_span.start,
+                        end: pos,
+                    },
+                );
+                return None;
+            }
         };
 
         let mut attributes = Vec::new();
@@ -495,10 +667,20 @@ impl<'a> TemplateParser<'a> {
         while !self.stream.is_eof() {
             match self.stream.peek_kind() {
                 Some(TokenKind::TagOpenEnd) | Some(TokenKind::TagSelfClose) => break,
-                Some(TokenKind::PropertyBinding(name)) => {
-                    let prop_name = name.to_string();
-                    self.stream.bump();
+                Some(TokenKind::PropertyBinding(pname)) => {
+                    let prop_name = pname.to_string();
+                    let tok = self.stream.bump().unwrap();
                     let (value, span) = self.consume_attr_value();
+                    if value.trim().is_empty() {
+                        self.emit_warning(
+                            "ANG0160",
+                            format!(
+                                "Property binding '[{}]' has an empty expression.",
+                                prop_name
+                            ),
+                            span.clone().unwrap_or(tok.span),
+                        );
+                    }
                     properties.push(PropertyBindingNode {
                         node_type: "property".to_string(),
                         name: prop_name,
@@ -506,10 +688,17 @@ impl<'a> TemplateParser<'a> {
                         span,
                     });
                 }
-                Some(TokenKind::EventBinding(name)) => {
-                    let ev_name = name.to_string();
-                    self.stream.bump();
+                Some(TokenKind::EventBinding(ename)) => {
+                    let ev_name = ename.to_string();
+                    let tok = self.stream.bump().unwrap();
                     let (handler, span) = self.consume_attr_value();
+                    if handler.trim().is_empty() {
+                        self.emit_warning(
+                            "ANG0161",
+                            format!("Event binding '({})' has an empty handler.", ev_name),
+                            span.clone().unwrap_or(tok.span),
+                        );
+                    }
                     events.push(EventBindingNode {
                         node_type: "event".to_string(),
                         name: ev_name,
@@ -517,10 +706,17 @@ impl<'a> TemplateParser<'a> {
                         span,
                     });
                 }
-                Some(TokenKind::TwoWayBinding(name)) => {
-                    let tw_name = name.to_string();
-                    self.stream.bump();
+                Some(TokenKind::TwoWayBinding(tname)) => {
+                    let tw_name = tname.to_string();
+                    let tok = self.stream.bump().unwrap();
                     let (expression, span) = self.consume_attr_value();
+                    if expression.trim().is_empty() {
+                        self.emit_warning(
+                            "ANG0162",
+                            format!("Two-way binding '[({})]' has an empty expression.", tw_name),
+                            span.clone().unwrap_or(tok.span),
+                        );
+                    }
                     two_ways.push(TwoWayBindingNode {
                         node_type: "twoWay".to_string(),
                         name: tw_name,
@@ -580,6 +776,17 @@ impl<'a> TemplateParser<'a> {
             }
         }
 
+        if self.stream.is_eof() {
+            self.emit_error(
+                "ANG0101",
+                format!("Unclosed opening tag '<{}...'. Expected '>' or '/>'.", name),
+                SourceSpan {
+                    start: open_span.start,
+                    end: self.stream.pos(),
+                },
+            );
+        }
+
         let is_self_closing = if is_void_element(&name) {
             if let Some(TokenKind::TagSelfClose) = self.stream.peek_kind() {
                 self.stream.bump();
@@ -599,13 +806,30 @@ impl<'a> TemplateParser<'a> {
 
         let mut children = Vec::new();
         if !is_self_closing {
+            let mut closed = false;
             while !self.stream.is_eof() {
                 if self.check_closing_tag(&name) {
                     self.consume_closing_tag(&name);
+                    closed = true;
                     break;
                 }
                 if let Some(TokenKind::TagCloseStart) = self.stream.peek_kind() {
-                    // Mismatched or outer closing tag, break to allow parent to close!
+                    // Mismatched closing tag!
+                    if let Some(Token {
+                        kind: TokenKind::TagName(actual_name),
+                        span,
+                        ..
+                    }) = self.stream.peek_at(1)
+                    {
+                        self.emit_error(
+                            "ANG0103",
+                            format!(
+                                "Mismatched closing tag '</{}>'. Expected closing tag '</{}>'.",
+                                actual_name, name
+                            ),
+                            span.clone(),
+                        );
+                    }
                     break;
                 }
                 let start_pos = self.stream.pos();
@@ -620,6 +844,17 @@ impl<'a> TemplateParser<'a> {
                     }
                 }
             }
+
+            if !closed && self.stream.is_eof() {
+                self.emit_error(
+                    "ANG0102",
+                    format!(
+                        "Unclosed element '<{}>'. Expected closing tag '</{}>'.",
+                        name, name
+                    ),
+                    open_span.clone(),
+                );
+            }
         }
 
         Some(ElementNode {
@@ -630,7 +865,10 @@ impl<'a> TemplateParser<'a> {
             two_ways,
             references,
             children,
-            span: None,
+            span: Some(SourceSpan {
+                start: open_span.start,
+                end: self.stream.pos(),
+            }),
         })
     }
 }
@@ -750,9 +988,107 @@ pub fn parse_template(input: &str) -> Vec<TemplateNode> {
     TemplateParser::new(input).parse()
 }
 
+pub fn parse_template_with_diagnostics(
+    input: &str,
+) -> (Vec<TemplateNode>, Vec<TemplateDiagnostic>) {
+    TemplateParser::new(input).parse_with_diagnostics()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_diagnostics_unclosed_element() {
+        let tmpl = "<div><span>Hello</span>";
+        let (nodes, diags) = parse_template_with_diagnostics(tmpl);
+        assert_eq!(nodes.len(), 1);
+        let unclosed = diags.iter().find(|d| d.code == "ANG0102");
+        assert!(unclosed.is_some(), "Expected ANG0102 for unclosed <div>");
+        let d = unclosed.unwrap();
+        assert!(d.message.contains("Unclosed element '<div>'"));
+        let snippet = d.render_snippet(tmpl, Some("test.html"));
+        assert!(snippet.contains("error[ANG0102]"));
+        assert!(snippet.contains("test.html:1:1"));
+    }
+
+    #[test]
+    fn test_diagnostics_mismatched_closing_tag() {
+        let tmpl = "<div></span>";
+        let (_nodes, diags) = parse_template_with_diagnostics(tmpl);
+        let mismatched = diags.iter().find(|d| d.code == "ANG0103");
+        assert!(mismatched.is_some(), "Expected ANG0103 for </span>");
+        let d = mismatched.unwrap();
+        assert!(d.message.contains("Mismatched closing tag '</span>'"));
+        assert!(d.message.contains("Expected closing tag '</div>'"));
+    }
+
+    #[test]
+    fn test_diagnostics_unclosed_opening_tag() {
+        let tmpl = r#"<div class="card""#;
+        let (_nodes, diags) = parse_template_with_diagnostics(tmpl);
+        let unclosed_tag = diags.iter().find(|d| d.code == "ANG0101");
+        assert!(
+            unclosed_tag.is_some(),
+            "Expected ANG0101 for <div class=\"card\""
+        );
+        let d = unclosed_tag.unwrap();
+        assert!(d.message.contains("Unclosed opening tag '<div...'"));
+    }
+
+    #[test]
+    fn test_diagnostics_control_flow_missing_condition_and_unclosed() {
+        // Missing condition
+        let tmpl = "@if () {\n  <span>Hi</span>\n}";
+        let (_nodes, diags) = parse_template_with_diagnostics(tmpl);
+        let missing_cond = diags.iter().find(|d| d.code == "ANG0110");
+        assert!(
+            missing_cond.is_some(),
+            "Expected ANG0110 for empty condition"
+        );
+
+        // Unclosed block
+        let tmpl2 = "@if (isLoggedIn) {\n  <div>Hello</div>";
+        let (_nodes2, diags2) = parse_template_with_diagnostics(tmpl2);
+        let unclosed_block = diags2.iter().find(|d| d.code == "ANG0112");
+        assert!(
+            unclosed_block.is_some(),
+            "Expected ANG0112 for unclosed @if block"
+        );
+        let snippet = unclosed_block.unwrap().render_snippet(tmpl2, None);
+        assert!(snippet.contains("template:1:1"));
+    }
+
+    #[test]
+    fn test_diagnostics_for_missing_track() {
+        let tmpl = "@for (item of items) {\n  <div>{{ item.name }}</div>\n}";
+        let (_nodes, diags) = parse_template_with_diagnostics(tmpl);
+        let missing_track = diags.iter().find(|d| d.code == "ANG0121");
+        assert!(
+            missing_track.is_some(),
+            "Expected ANG0121 warning for missing track"
+        );
+        assert_eq!(missing_track.unwrap().severity, DiagnosticSeverity::Warning);
+    }
+
+    #[test]
+    fn test_diagnostics_empty_interpolation() {
+        let tmpl = "<p>Welcome {{   }}!</p>";
+        let (_nodes, diags) = parse_template_with_diagnostics(tmpl);
+        let empty_interp = diags.iter().find(|d| d.code == "ANG0150");
+        assert!(
+            empty_interp.is_some(),
+            "Expected ANG0150 warning for empty interpolation"
+        );
+    }
+
+    #[test]
+    fn test_diagnostics_empty_bindings() {
+        let tmpl = r#"<input [disabled]="" (click)="" />"#;
+        let (_nodes, diags) = parse_template_with_diagnostics(tmpl);
+        assert!(diags.iter().any(|d| d.code == "ANG0160"));
+        assert!(diags.iter().any(|d| d.code == "ANG0161"));
+    }
 
     #[test]
     fn test_decode_html_entities() {

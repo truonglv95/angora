@@ -217,3 +217,110 @@ pub struct DeferBlockNode {
     #[serde(rename = "errorBlock")]
     pub error_block: Option<ErrorBlock>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DiagnosticSeverity {
+    Error,
+    Warning,
+    Info,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplateDiagnostic {
+    pub code: String,
+    pub message: String,
+    pub severity: DiagnosticSeverity,
+    pub span: SourceSpan,
+    pub line: usize,
+    pub column: usize,
+}
+
+impl TemplateDiagnostic {
+    pub fn error(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        span: SourceSpan,
+        line: usize,
+        column: usize,
+    ) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            severity: DiagnosticSeverity::Error,
+            span,
+            line,
+            column,
+        }
+    }
+
+    pub fn warning(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        span: SourceSpan,
+        line: usize,
+        column: usize,
+    ) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            severity: DiagnosticSeverity::Warning,
+            span,
+            line,
+            column,
+        }
+    }
+
+    /// Renders a human-friendly visual code snippet with line numbers and caret pointer,
+    /// similar to rustc / oxc compiler errors.
+    pub fn render_snippet(&self, source: &str, file_name: Option<&str>) -> String {
+        let file = file_name.unwrap_or("template");
+        let sev_str = match self.severity {
+            DiagnosticSeverity::Error => "error",
+            DiagnosticSeverity::Warning => "warning",
+            DiagnosticSeverity::Info => "info",
+        };
+        let mut out = format!(
+            "{}[{}]: {}\n  --> {}:{}:{}\n",
+            sev_str, self.code, self.message, file, self.line, self.column
+        );
+
+        let lines: Vec<&str> = source.lines().collect();
+        if self.line > 0 && self.line <= lines.len() {
+            let line_idx = self.line - 1;
+            let line_str = lines[line_idx];
+            let line_num_str = self.line.to_string();
+            let pad = " ".repeat(line_num_str.len());
+            out.push_str(&format!("{} |\n", pad));
+            out.push_str(&format!("{} | {}\n", line_num_str, line_str));
+            let col_indent = " ".repeat(self.column.saturating_sub(1));
+            let span_len = (self.span.end.saturating_sub(self.span.start)).max(1);
+            let carets = "^".repeat(
+                span_len
+                    .min(line_str.len().saturating_sub(self.column.saturating_sub(1)))
+                    .max(1),
+            );
+            out.push_str(&format!("{} | {}{}\n", pad, col_indent, carets));
+        }
+        out
+    }
+}
+
+/// Calculate 1-indexed (line, column) from byte offset in source string.
+pub fn calculate_line_column(source: &str, offset: usize) -> (usize, usize) {
+    let mut line = 1;
+    let mut col = 1;
+    for (i, ch) in source.char_indices() {
+        if i >= offset {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    (line, col)
+}

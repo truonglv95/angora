@@ -23,7 +23,7 @@ pub use lsp::{
     LspImportInfo, LspMethodInfo, LspPosition, LspPropertyInfo, LspRange, LspTemplateInfo,
     LspTypeDefInfo, LspTypeMemberInfo,
 };
-pub use parser::parse_template;
+pub use parser::{parse_template, parse_template_with_diagnostics, TemplateParser};
 pub use sfc::{compile_sfc, parse_sfc, SfcBlock, SfcDescriptor};
 pub use ssr_codegen::compile_ssr_template;
 pub use tcb::{

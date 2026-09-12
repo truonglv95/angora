@@ -4,6 +4,7 @@ use super::type_checker::{
     check_template_types, collect_template_scope, extract_left_hand_expression,
     get_builtin_type_def, get_expected_property_type, infer_expression_type, LspDiagnostic,
 };
+use crate::{calculate_line_column, parse_template_with_diagnostics, DiagnosticSeverity};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -176,6 +177,36 @@ impl AngoraLanguageEngine {
 
         for comp in &analysis.components {
             if let Some(tmpl) = &comp.template {
+                // 1. Template Syntax Diagnostics
+                let (_nodes, syntax_diags) = parse_template_with_diagnostics(&tmpl.content);
+                for sd in syntax_diags {
+                    let global_start = (tmpl.offset as usize) + sd.span.start;
+                    let global_end = (tmpl.offset as usize) + sd.span.end;
+                    let (start_line, start_col) = calculate_line_column(content, global_start);
+                    let (end_line, end_col) = calculate_line_column(content, global_end);
+                    all_diags.push(LspDiagnostic {
+                        code: sd.code,
+                        message: sd.message,
+                        severity: match sd.severity {
+                            DiagnosticSeverity::Error => "Error".to_string(),
+                            DiagnosticSeverity::Warning => "Warning".to_string(),
+                            DiagnosticSeverity::Info => "Information".to_string(),
+                        },
+                        range: LspRange {
+                            start: LspPosition {
+                                line: (start_line.saturating_sub(1)) as u32,
+                                character: (start_col.saturating_sub(1)) as u32,
+                            },
+                            end: LspPosition {
+                                line: (end_line.saturating_sub(1)) as u32,
+                                character: (end_col.saturating_sub(1)) as u32,
+                            },
+                        },
+                        source: "angora-template".to_string(),
+                    });
+                }
+
+                // 2. Template Type Diagnostics
                 let parsed = parse_template_document(&tmpl.content, tmpl.offset as usize, content);
                 let diags = check_template_types(&parsed, comp, &analysis.type_defs, Some(content));
                 all_diags.extend(diags);
